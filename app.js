@@ -335,6 +335,13 @@ async function saveFile(filename, data){
   catch(e){ toast(e && e.code==='declined' ? 'Download cancelled' : 'Couldn’t save: '+(e && (e.message||e.code))); return false; }
 }
 async function exportAudio(buf, base, statusEl){
+  // On the hosted site: an instant, lossless .wav. Inside a claude.ai artifact .wav isn't on the
+  // download allowlist, so it records a .webm/.mp4 in real time instead.
+  if(!(window.claude && window.claude.use)){
+    stopAudio(); statusEl.textContent=`saving ${buf.duration.toFixed(1)} s as .wav…`;
+    await saveFile(`${base}.wav`, new Blob([wavBytes(buf.getChannelData(0), buf.sampleRate)],{type:'audio/wav'}));
+    statusEl.textContent=''; return;
+  }
   const types=[['audio/webm;codecs=opus','webm'],['audio/webm','webm'],['audio/mp4','mp4']];
   const ty = window.MediaRecorder ? types.find(t=>MediaRecorder.isTypeSupported(t[0])) : null;
   if(!ty){ toast('This browser can’t encode audio files.'); return; }
@@ -478,10 +485,19 @@ function buildFont(){
   const dot=(cx,cy)=>{ const p=new opentype.Path(); circ(p,[cx,cy],rr*1.4); return p; };
   glyphs.push(new opentype.Glyph({name:'period',unicode:46,advanceWidth:320,path:dot(150,70)}));
   glyphs.push(new opentype.Glyph({name:'comma',unicode:44,advanceWidth:320,path:(()=>{ const p=dot(150,70); const r=rr; poly(p,[[150-r,70],[150+r,70],[110,-90]]); return p; })()}));
-  const used=new Set([0,32,44,46]);
-  PAL.forEach(p=>{ const cp=p.k.codePointAt(0); const up=p.k.toUpperCase(); const ucp=up.length===1&&up!==p.k?up.codePointAt(0):null;
-    const uni=[cp]; if(ucp&&!used.has(ucp)) uni.push(ucp); uni.forEach(u=>used.add(u));
-    glyphs.push(new opentype.Glyph({name:'uni'+cp.toString(16).toUpperCase().padStart(4,'0'),unicode:cp,unicodes:uni,advanceWidth:800,path:glyphPath(p.k)})); });
+  const bar=(x0,y0,x1,y1)=>{ const p=new opentype.Path(); const dx=x1-x0, dy=y1-y0, l=Math.hypot(dx,dy)||1, nx=-dy/l*rr, ny=dx/l*rr; poly(p,[[x0+nx,y0+ny],[x1+nx,y1+ny],[x1-nx,y1-ny],[x0-nx,y0-ny]]); circ(p,[x0,y0],rr); circ(p,[x1,y1],rr); return p; };
+  const merge=(...ps)=>{ const p=new opentype.Path(); ps.forEach(q=>p.extend(q)); return p; };
+  glyphs.push(new opentype.Glyph({name:'exclam',unicode:33,advanceWidth:320,path:merge(bar(150,700,150,280),dot(150,70))}));
+  glyphs.push(new opentype.Glyph({name:'question',unicode:63,advanceWidth:560,path:(()=>{ const p=new opentype.Path(); const pts=[]; for(let i=0;i<=12;i++){ const a=Math.PI*(1-i/12)-.15; pts.push([280+Math.cos(a)*170, 560+Math.sin(a)*150]); } pts.push([280,330]); for(let i=0;i<pts.length-1;i++) p.extend(bar(pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1])); p.extend(bar(280,330,280,270)); p.extend(dot(280,70)); return p; })()}));
+  glyphs.push(new opentype.Glyph({name:'hyphen',unicode:45,advanceWidth:440,path:bar(90,330,350,330)}));
+  glyphs.push(new opentype.Glyph({name:'quotesingle',unicode:39,advanceWidth:260,path:bar(130,720,130,540)}));
+  // one glyph per character: opentype.js 1.3.4 writes only the first code of a glyph into cmap,
+  // so capitals get their own copy of the letter (sentences start with one)
+  const used=new Set([0,32,33,39,44,45,46,63]);
+  PAL.forEach(p=>{ const cp=p.k.codePointAt(0); const hex=c=>c.toString(16).toUpperCase().padStart(4,'0');
+    glyphs.push(new opentype.Glyph({name:'uni'+hex(cp),unicode:cp,advanceWidth:800,path:glyphPath(p.k)})); used.add(cp);
+    const up=p.k.toUpperCase(); const ucp=up.length===1&&up!==p.k?up.codePointAt(0):null;
+    if(ucp&&!used.has(ucp)){ glyphs.push(new opentype.Glyph({name:'uni'+hex(ucp),unicode:ucp,advanceWidth:800,path:glyphPath(p.k)})); used.add(ucp); } });
   const font=new opentype.Font({familyName:fam,styleName:'Regular',unitsPerEm:1000,ascender:860,descender:-220,glyphs});
   return {font, fam};
 }
@@ -699,7 +715,11 @@ chipGroup($('#gPen'), PENS, L.pen, v=>{ L.pen=v; glyphsChanged(); });
 $('#gRegenAll').addEventListener('click',()=>{ L.gseed=Math.floor(Math.random()*4294967295); syncSliders(); regenAlphabet(); });
 $('#gSurprise').addEventListener('click',()=>{ const r=Math.random; L.gseed=Math.floor(r()*4294967295); L.style=pick(r,Object.keys(STYLES)); L.pen=pick(r,['round','nib','brush','hair','brush','nib']); L.weird=+(r()*.85).toFixed(2); L.slant=+((r()-.5)*.6).toFixed(2); L.weight=+(4+r()*11).toFixed(1); syncSliders(); regenAlphabet(); toast(STYLES[L.style]+', '+PENS[L.pen]); });
 $('#fontName').addEventListener('input',refreshFontPreview);
-$('#fSave').addEventListener('click',async()=>{ try{ const {font,fam}=buildFont(); await saveFile(slug(fam)+'.ttf', font.toArrayBuffer()); }catch(e){ toast(e.message); } });
+// opentype.js writes OpenType/CFF outlines, so the honest extension is .otf.
+// Inside a claude.ai artifact the download allowlist has no .otf, so it falls back to .ttf there.
+const FONT_EXT = (window.claude && window.claude.use) ? 'ttf' : 'otf';
+$('#fSave').textContent=`save font (.${FONT_EXT})`;
+$('#fSave').addEventListener('click',async()=>{ try{ const {font,fam}=buildFont(); await saveFile(slug(fam)+'.'+FONT_EXT, font.toArrayBuffer()); }catch(e){ toast(e.message); } });
 $('#fChart').addEventListener('click',()=>{
   const inv=PAL.filter(p=>L.inv.includes(p.k)); const cols=8, cw=130, ch=170, rows=Math.ceil(inv.length/cols);
   const ink='#151A23';

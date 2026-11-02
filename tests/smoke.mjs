@@ -20,7 +20,7 @@ const check = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${msg}`); if (
 const browser = await chromium.launch();
 const errors = [];
 const page = async (opts = {}) => {
-  const ctx = await browser.newContext(opts);
+  const ctx = await browser.newContext({ acceptDownloads: true, ...opts });
   await ctx.route('https://fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
   const p = await ctx.newPage(); p.on('pageerror', e => errors.push(e.message)); return p;
 };
@@ -39,6 +39,9 @@ try {
   await p.waitForFunction(() => /s of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
   check(true, 'speech renders');
   await p.click('#tStop');
+  const [audio] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveAudio')]);
+  const wav = await readFile(await audio.path());
+  check(audio.suggestedFilename().endsWith('.wav') && wav.subarray(0, 4).toString('latin1') === 'RIFF' && wav.length > 44100, 'speech saves as a .wav file');
   check((await p.$$('#exList .chip')).length >= 1, 'examples listed');
   await p.click('#exList .chip:nth-child(2)'); await p.waitForTimeout(600);
   const name = await p.inputValue('#langName');
@@ -53,6 +56,9 @@ try {
   check((await q.textContent('#outRoman')) === words, 'share link gives the same words');
   await p.goto(URL0 + '#script'); await p.waitForTimeout(800);
   check(!(await p.textContent('#fStatus')).trim(), 'font builds');
+  const [font] = await Promise.all([p.waitForEvent('download'), p.click('#fSave')]);
+  const otf = await readFile(await font.path());
+  check(font.suggestedFilename().endsWith('.otf') && otf.subarray(0, 4).toString('latin1') === 'OTTO', 'font saves as an OpenType .otf file');
   const m = await page({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await m.goto(URL0 + '#translate'); await m.waitForTimeout(600);
   check((await m.evaluate(() => document.documentElement.scrollWidth)) <= 390, 'no sideways scroll on a phone');
