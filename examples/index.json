@@ -1,0 +1,22 @@
+[
+ {
+  "file": "velnari.json",
+  "name": "velnari",
+  "blurb": "the starter language: soft, flowing, a natural voice"
+ },
+ {
+  "file": "oorumna.json",
+  "name": "oorumna",
+  "blurb": "only 11 sounds, the smallest known count, spoken by a giant"
+ },
+ {
+  "file": "kxiqal.json",
+  "name": "kxiqal",
+  "blurb": "clicks, catches and a hive of voices"
+ },
+ {
+  "file": "shiyalu.json",
+  "name": "shiyalu",
+  "blurb": "all hush and glide, whispered"
+ }
+]

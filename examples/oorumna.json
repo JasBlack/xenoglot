@@ -1,0 +1,42 @@
+{
+ "xenoglot": 1,
+ "name": "Oorumna",
+ "seed": 31337,
+ "inv": [
+  "a",
+  "e",
+  "i",
+  "o",
+  "u",
+  "p",
+  "t",
+  "k",
+  "v",
+  "r",
+  "g"
+ ],
+ "onset": 1,
+ "coda": 0,
+ "cluster": 0,
+ "maxSyl": 4,
+ "voice": {
+  "pitch": 58,
+  "speed": 0.8,
+  "formant": 0.68,
+  "breath": 0.25,
+  "jitter": 0.6,
+  "growl": 0.35,
+  "choir": 0,
+  "ring": 0,
+  "vib": 0.1,
+  "space": 0.55
+ },
+ "style": "runic",
+ "pen": "nib",
+ "weird": 0.15,
+ "slant": 0,
+ "gseed": 118812,
+ "weight": 10,
+ "glyphs": {},
+ "lexicon": {}
+}
