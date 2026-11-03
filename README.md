@@ -6,7 +6,7 @@ Build a new spoken language on top of English grammar, entirely in your browser.
 
 ![Xenoglot](og.jpg)
 
-1. **Sounds**: choose your language's sounds from 37 (vowels, stops, hisses, clicks, rolled r…) and give them a voice. Ten presets go from a natural voice to a giant, a whispering spirit or a hive choir. You can replace any sound with your own voice.
+1. **Sounds**: choose your language's sounds from 37 (vowels, stops, hisses, clicks, rolled r…) and give them a voice. Pick the **built-in** synthesizer or a **natural** neural voice (female or male), then a character: ten presets go from a plain voice to a giant, a whispering spirit or a hive choir. You can replace any sound with your own voice, and each sound tells you how to record it.
 2. **Words**: every English word gets a permanent new word built from your sounds. Grammar stays English: same word order, and plural, past tense, *-ing*, possessive, *n't* and *-ly* become fixed endings. Edit any word in the dictionary.
 3. **Translate**: type English and get the new language written in Latin letters, in its own script and as pronunciation (IPA). Hear it and save the audio as a .wav file.
 4. **Audio**: drop in a recording of English speech. Xenoglot reads its phrases, rhythm and melody and re-voices it in your language with the same timing. Paste the words spoken for a true translation.
@@ -41,13 +41,19 @@ npx playwright install chromium
 npm test
 ```
 
+## The natural voice
+
+The natural voices are [Piper](https://github.com/rhasspy/piper) neural voices (`en_US-kristin` and `en_US-norman`, trained on public-domain recordings) running in the browser with [onnxruntime-web](https://onnxruntime.ai). They read your language's sounds directly, so they pronounce invented words as written, with a light English accent. Each voice downloads once (about 63 MB) from Hugging Face when you pick it, and then works offline from the browser cache. Pitch, speed, roughness, warble, many voices, metallic and space apply to it. Growl, breathiness, your recordings and audio-track conversion use the built-in voice.
+
 ## Privacy
 
-Everything runs in the browser: synthesis (Web Audio API), word generation, audio analysis and font building (opentype.js). No uploads, no accounts, no tracking. The microphone is used only while you record, and only after you allow it.
+Everything runs in the browser: synthesis (Web Audio API and onnxruntime-web), word generation, audio analysis and font building (opentype.js). No uploads, no accounts, no tracking. The only outside request is the natural voice download from Hugging Face, and only if you choose that voice. The microphone is used only while you record, and only after you allow it.
 
 ## Credits
 
 - [opentype.js](https://github.com/opentypejs/opentype.js) (MIT), vendored in `vendor/`
+- [onnxruntime-web](https://github.com/microsoft/onnxruntime) 1.20.1 (MIT), vendored in `vendor/ort/`
+- [Piper](https://github.com/rhasspy/piper) voices from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices): kristin and norman, trained on public-domain LibriVox recordings
 - Fonts: IBM Plex Mono, Archivo and Charis SIL (SIL Open Font License), loaded from Google Fonts
 
 ## Licence

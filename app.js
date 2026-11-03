@@ -77,7 +77,7 @@ const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return n
 /* ---------- language state ---------- */
 const DEFAULT = { name:'Velnari', seed: 7741, inv: ['a','e','i','o','u','ë','p','t','k','d','g','m','n','ŋ','s','š','v','z','l','ř','j','x','c'],
   onset:.85, coda:.35, cluster:.12, maxSyl:4, voice:{pitch:150,speed:1,formant:1.12,breath:.3,jitter:.45,growl:0,choir:0,ring:0,vib:.15,space:.25},
-  style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{} };
+  style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{}, engine:'synth' };
 const PRESETS = {
   'Natural voice':      {pitch:130,speed:1,formant:1,breath:.22,jitter:.45,growl:0,choir:0,ring:0,vib:.1,space:.2},
   'Soft and breathy':   {pitch:200,speed:.92,formant:1.15,breath:.55,jitter:.35,growl:0,choir:0,ring:0,vib:.15,space:.35},
@@ -352,7 +352,91 @@ async function renderInner(segs, dur, voice, extra={}){
 // loudness by the body of the speech, not its loudest click; soft-clip the rare spikes
 function normalise(d){ const n=d.length, step=Math.max(1,Math.floor(n/60000)), a=[]; for(let i=0;i<n;i+=step) a.push(Math.abs(d[i])); a.sort((x,y)=>x-y);
   const ref=a[Math.floor(a.length*.985)]||0; if(!ref) return; const k=.62/ref; for(let i=0;i<n;i++){ const v=d[i]*k; d[i]=Math.tanh(v*1.15)/1.05; } }
-async function speakWords(words){ const {segs,dur}=wordsToSegs(words, L.voice); return render(segs,dur,L.voice); }
+/* ---------- natural voice: Piper neural voices, run in the browser with onnxruntime-web ----------
+   The voice reads the language's IPA directly (no English spelling step). Models are public-domain Piper
+   voices on Hugging Face, downloaded once and kept in Cache Storage. The built-in synth stays as the fallback. */
+const NATURAL={
+  kristin:{label:'natural · female', url:'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
+  norman:{label:'natural · male', url:'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
+};
+const VOICE_CACHE='xenoglot-voices-v1';
+const inArtifact=()=>!!(window.claude && window.claude.use);
+let ortPromise=null; const piper={};
+function loadOrt(){ return ortPromise ??= new Promise((res,rej)=>{ if(window.ort) return res(window.ort);
+  const s=document.createElement('script'); s.src='vendor/ort/ort.wasm.min.js';
+  s.onload=()=>{ ort.env.wasm.wasmPaths=new URL('vendor/ort/',location.href).href; ort.env.wasm.numThreads=1; res(ort); };
+  s.onerror=()=>{ ortPromise=null; rej(new Error('The voice engine didn’t load.')); }; document.head.appendChild(s); }); }
+async function fetchCached(url,onProgress){
+  let cache=null; try{ cache=await caches.open(VOICE_CACHE); const hit=await cache.match(url); if(hit){ onProgress&&onProgress(1,1); return await hit.arrayBuffer(); } }catch(e){}
+  const r=await fetch(url); if(!r.ok) throw new Error('The voice download failed ('+r.status+'). Check your connection and try again.');
+  const total=+r.headers.get('content-length')||0, reader=r.body.getReader(), parts=[]; let got=0;
+  for(;;){ const {done,value}=await reader.read(); if(done) break; parts.push(value); got+=value.length; onProgress&&onProgress(got,total); }
+  const blob=new Blob(parts); try{ cache&&await cache.put(url,new Response(blob)); }catch(e){} return await blob.arrayBuffer(); }
+function naturalStatus(msg){ const el=$('#engineStatus'); if(el) el.textContent=msg; }
+async function piperVoice(id){
+  if(piper[id]) return piper[id];
+  if(inArtifact()) throw new Error('The natural voice needs the hosted site (xenoglot.jas.black). Using the built-in voice here.');
+  return piper[id]=(async()=>{ try{
+    const v=NATURAL[id]; naturalStatus('loading the voice engine…'); const O=await loadOrt();
+    const cfg=JSON.parse(new TextDecoder().decode(await fetchCached(v.url+'.onnx.json')));
+    const model=await fetchCached(v.url+'.onnx',(g,t)=>naturalStatus(t>1?`downloading ${v.label}: ${(g/1e6).toFixed(0)} / ${(t/1e6).toFixed(0)} MB (once, then it works offline)`:'loading the voice…'));
+    naturalStatus('starting the voice…'); const sess=await O.InferenceSession.create(model,{executionProviders:['wasm']});
+    naturalStatus(`${v.label} ready`); return {sess,cfg,O};
+  }catch(e){ delete piper[id]; naturalStatus(''); throw e; } })(); }
+// phrases of IPA, stress on each word's first syllable, punctuation kept for phrasing
+function ipaPhrases(words){ const out=[]; let cur=[];
+  words.forEach(w=>{ const ipa=toKeys(w.al).map(k=>PM[k].ipa).join(''); if(ipa) cur.push('ˈ'+ipa);
+    if(w.end){ if(cur.length) out.push({ipa:cur.join(' ')+(w.end===','?',':w.end==='?'?'?':'.'), end:w.end}); cur=[]; } });
+  if(cur.length) out.push({ipa:cur.join(' ')+'.', end:'.'}); return out; }
+function phonemeIds(ipa,cfg){ const m=cfg.phoneme_id_map, pad=m['_']; const ids=[...m['^'],...pad];
+  for(const ch of [...ipa]){ const id=m[ch]; if(id) ids.push(...id,...pad); } ids.push(...m['$']); return ids; }
+async function speakNatural(words, voice){
+  voice={...DEFAULT.voice,...voice}; const {sess,cfg,O}=await piperVoice(L.engine); const v=NATURAL[L.engine], sr=cfg.audio.sample_rate;
+  // pitch and throat size both move the voice by resampling, so speed is compensated through length_scale
+  const rate=Math.min(2,Math.max(.5, Math.pow(voice.pitch/v.pitch,.6)*Math.pow(voice.formant,.8)));
+  const lengthScale=Math.min(2.5,Math.max(.4, rate/voice.speed));
+  const noise=.35+voice.jitter*.6, noiseW=.4+voice.jitter*.8;
+  const chunks=[];
+  for(const ph of ipaPhrases(words)){ const ids=phonemeIds(ph.ipa,cfg); if(ids.length<4) continue;
+    const feeds={ input:new O.Tensor('int64',BigInt64Array.from(ids.map(BigInt)),[1,ids.length]),
+      input_lengths:new O.Tensor('int64',BigInt64Array.from([BigInt(ids.length)]),[1]),
+      scales:new O.Tensor('float32',Float32Array.from([noise,lengthScale,noiseW]),[3]) };
+    const res=await sess.run(feeds); chunks.push(res[sess.outputNames[0]].data);
+    chunks.push(new Float32Array(Math.round(sr*(ph.end===','?.12:.3)*lengthScale))); }
+  if(!chunks.length) throw new Error('Nothing to say yet. Type some English first.');
+  const n=chunks.reduce((a,c)=>a+c.length,0); const raw=new Float32Array(n); let o=0; for(const c of chunks){ raw.set(c,o); o+=c.length; }
+  return naturalFx(raw, sr, voice, rate);
+}
+// the same alien effects as the built-in voice: warble, many voices, metallic, space
+async function naturalFx(raw, srIn, voice, rate){
+  const sr=44100, dur=raw.length/srIn/rate, tail=voice.space>0?.2+voice.space*1.6:0;
+  const ctx=new OfflineAudioContext(1, Math.ceil(sr*(dur+tail+.1)), sr);
+  const buf=ctx.createBuffer(1, raw.length, srIn); buf.copyToChannel(raw,0);
+  const mix=ctx.createGain(), out=ctx.createGain(); out.connect(ctx.destination);
+  const lfo=ctx.createOscillator(); lfo.frequency.value=4.6+voice.vib*2; lfo.start(0);
+  const voiceSrc=(cents,gain,delay)=>{ const s=ctx.createBufferSource(); s.buffer=buf; s.playbackRate.value=rate; s.detune.value=cents;
+    const lg=ctx.createGain(); lg.gain.value=voice.vib*45; lfo.connect(lg).connect(s.detune); const g=ctx.createGain(); g.gain.value=gain; s.connect(g).connect(mix); s.start(delay); };
+  voiceSrc(0,1,0);
+  if(voice.choir>0){ voiceSrc(6+voice.choir*6, voice.choir*.7, .012); voiceSrc(-(7+voice.choir*6), voice.choir*.7, .021); }
+  const dry=ctx.createGain(); dry.gain.value=1-voice.ring*.85; mix.connect(dry).connect(out);
+  if(voice.ring>0){ const ring=ctx.createGain(); ring.gain.value=0; const ro=ctx.createOscillator(); ro.frequency.value=40+voice.formant*35; ro.connect(ring.gain); ro.start(0);
+    const wet=ctx.createGain(); wet.gain.value=voice.ring*1.5; mix.connect(ring).connect(wet).connect(out); }
+  if(voice.space>0){ const len=Math.ceil(sr*(.25+voice.space*1.5)), ir=ctx.createBuffer(1,len,sr), d=ir.getChannelData(0); let lp=0;
+    for(let i=0;i<len;i++){ lp=lp*.6+(Math.random()*2-1)*.4; d[i]=lp*Math.pow(1-i/len,2.2+(1-voice.space)*2); }
+    const cv=ctx.createConvolver(); cv.buffer=ir; const wg=ctx.createGain(); wg.gain.value=voice.space*.55; out.connect(cv).connect(wg).connect(ctx.destination); }
+  const b=await ctx.startRendering(); normalise(b.getChannelData(0)); return b;
+}
+async function speakWords(words){
+  if(L.engine && NATURAL[L.engine]){
+    if(Object.keys(recs).length && !speakWords.warned){ speakWords.warned=true; toast('The natural voice doesn’t use your recordings. Pick built-in to hear them.'); }
+    const led=$('#ledVoice'); led&&led.classList.add('on');
+    try{ return await speakNatural(words, L.voice); }
+    catch(e){ toast(e.message||'The natural voice failed, so the built-in voice is speaking.'); }
+    finally{ if(led&&!playing) led.classList.remove('on'); }
+  }
+  const {segs,dur}=wordsToSegs(words, L.voice); return render(segs,dur,L.voice);
+}
+
 
 /* ---------- playback, waveform, export ---------- */
 let playing=null;
@@ -576,7 +660,7 @@ async function micRecord(btn, secs){ // secs = fixed length; 0 = until the butto
 $('#palette').addEventListener('click', async e=>{
   const card=e.target.closest('.snd'); if(!card) return; const k=card.dataset.k; const a=e.target.closest('[data-a]')?.dataset.a;
   if(!a && e.target.closest('.main')){ const i=L.inv.indexOf(k); if(i>=0){ if(isV(k)&&V().length<=1){ toast('A language needs at least one vowel.'); return; } L.inv.splice(i,1); } else L.inv.push(k); changed(); renderPalette(); return; }
-  if(a==='play'){ const w = isV(k) ? k+k : 'a'+k+'a'; play(await render(...(()=>{ const {segs,dur}=wordsToSegs([{al:w,end:'.'}],L.voice); return [segs,dur]; })(),L.voice)); }
+  if(a==='play'){ const w = isV(k) ? k+k : 'a'+k+'a'; play(await speakWords([{al:w,end:'.'}])); }
   if(a==='up'){ recTarget=k; $('#fileRec').click(); }
   if(a==='clr'){ delete recs[k]; saveRecs(); renderPalette(); }
   if(a==='rec'){ const btn=e.target; if(!micStop) toast('recording: '+recHint(k)); const ab=await micRecord(btn, REC[PM[k].t].hold?1.4:1); if(ab) await setRec(k, ab); }
@@ -788,6 +872,11 @@ SL.forEach(([i,o,get,set,f,kind])=>{ $(i).addEventListener('input',e=>{ set(+e.t
   if(kind===1) changed(); else if(kind===2){ regenAlphabet(); } else if(kind===3){ saveLang(); glyphsChanged(); } else { tBuf=null; markChip($('#vPreset'),''); sideLcd(); saveLang(); } setPct(e.target); }); });
 const presetOf=()=>Object.keys(PRESETS).find(n=>Object.keys(PRESETS[n]).every(k=>Math.abs(PRESETS[n][k]-L.voice[k])<1e-6))||'';
 chipGroup($('#vPreset'), Object.fromEntries(Object.keys(PRESETS).map(n=>[n,n.toLowerCase()])), '', n=>{ L.voice={...L.voice,...PRESETS[n]}; tBuf=null; saveLang(); syncSliders(); playSample(); });
+const ENGINES={synth:'built-in', ...Object.fromEntries(Object.entries(NATURAL).map(([k,v])=>[k,v.label]))};
+function renderEngine(){ const cur=NATURAL[L.engine]?L.engine:'synth'; markChip($('#vEngine'),cur);
+  $$('.synth-only').forEach(el=>el.classList.toggle('dimmed',cur!=='synth')); if(cur==='synth') naturalStatus(''); }
+chipGroup($('#vEngine'), ENGINES, 'synth', async id=>{ L.engine=id; tBuf=null; saveLang(); renderEngine(); sideLcd();
+  if(NATURAL[id]){ try{ await piperVoice(id); playSample(); }catch(e){ toast(e.message); L.engine='synth'; saveLang(); renderEngine(); } } else playSample(); });
 const setPct=el=>el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');
 $$('input.fad').forEach(el=>{ setPct(el); el.addEventListener('input',()=>setPct(el)); });
 let statusHold=0;
@@ -797,7 +886,7 @@ function sideLcd(){ $('#ledMine').classList.toggle('on',Object.keys(recs).length
 function setStatus(msg){ $('#statusLine').textContent=msg; statusHold=Date.now()+4000; setTimeout(sideLcd,4100); }
 async function playSample(){ const words=tokensToWords(translate('Hello, traveler. We have been waiting for you. Will you speak with us?',false)); getCtx(); play(await speakWords(words)); }
 $('#vTry').addEventListener('click',playSample);
-function syncSliders(){ SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
+function syncSliders(){ SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
 
 /* ---------- state changes ---------- */
 let rerenderT=0;

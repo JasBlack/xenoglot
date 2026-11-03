@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="1.2.0">
+<body data-ui="dark" data-tool="xenoglot" data-version="1.3.0">
 <header class="topbar">
   <div class="hl">
     <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
@@ -82,6 +82,11 @@
 <section class="view" id="v-sounds">
   <div class="panel">
     <h2><span><i>1</i>voice</span><span>tap a preset to hear it</span></h2>
+    <div class="label">engine</div>
+    <div class="chips" id="vEngine" role="group" aria-label="Voice engine"></div>
+    <p class="hint">built-in is a synthesizer: instant, every slider works, and it uses your recordings. natural is a neural voice (Piper, public-domain voices) that reads your language's sounds with a light English accent. It downloads once (63 MB), then works offline. Growl and breathiness only change the built-in voice.</p>
+    <div class="lcd" id="engineStatus"></div>
+    <div class="label">character</div>
     <div class="chips" id="vPreset" role="group" aria-label="Voice presets"></div>
     <div class="btnrow"><button type="button" class="key" id="vTry"><span aria-hidden="true">&#x25B6;</span> hear a sample</button></div>
     <details class="more adv"><summary>fine-tune the voice</summary>
@@ -89,9 +94,9 @@
         <div class="control"><label class="control-top" for="vPitch"><span>pitch</span><em id="oPitch"></em></label><input id="vPitch" type="range" min="45" max="400" step="1"></div>
         <div class="control"><label class="control-top" for="vSpeed"><span>speed</span><em id="oSpeed"></em></label><input id="vSpeed" type="range" min="0.5" max="1.8" step="0.05"></div>
         <div class="control"><label class="control-top" for="vFormant"><span>throat size</span><em id="oFormant"></em></label><input id="vFormant" type="range" min="0.6" max="1.7" step="0.01"></div>
-        <div class="control"><label class="control-top" for="vBreath"><span>breathiness</span><em id="oBreath"></em></label><input id="vBreath" type="range" min="0" max="1" step="0.01"></div>
+        <div class="control synth-only"><label class="control-top" for="vBreath"><span>breathiness</span><em id="oBreath"></em></label><input id="vBreath" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vJitter"><span>roughness</span><em id="oJitter"></em></label><input id="vJitter" type="range" min="0" max="1" step="0.01"></div>
-        <div class="control"><label class="control-top" for="vGrowl"><span>growl</span><em id="oGrowl"></em></label><input id="vGrowl" type="range" min="0" max="1" step="0.01"></div>
+        <div class="control synth-only"><label class="control-top" for="vGrowl"><span>growl</span><em id="oGrowl"></em></label><input id="vGrowl" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vChoir"><span>many voices</span><em id="oChoir"></em></label><input id="vChoir" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vRing"><span>metallic</span><em id="oRing"></em></label><input id="vRing" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vVib"><span>warble</span><em id="oVib"></em></label><input id="vVib" type="range" min="0" max="1" step="0.01"></div>
