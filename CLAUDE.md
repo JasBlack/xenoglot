@@ -27,13 +27,23 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 ## Data
 - `localStorage` keys (versioned): `xenoglot-v1-library` (`{current, langs:{id: language}}`), `xenoglot-v1-recs-<id>` (base64 clips per language), `xenoglot-v1-text`, `xenoglot-ui`.
 - Language file (`.json`) = the language object plus `recordings`. Share link = `?l=` + `z` + base64url(deflate-raw(JSON)), glyph points rounded to whole numbers, recordings left out. Links opened twice dedupe by `src`.
-- Words are deterministic: a word comes from `hash(seed + word)`, so the same language always gives the same words. Glyphs come from `gseed` + style + weirdness, and hand-drawn letters are stored as points.
+- Words are deterministic: a word comes from `hash(seed + word)`, so the same language always gives the same words. Changing `makeSyl`/`makeWord`/`langWeights` changes every saved language's words. Version 1.2.0 did this once, before launch. After launch, keep the old generator behind a `gen` field on the language rather than changing it in place. Glyphs come from `gseed` + style + weirdness, and hand-drawn letters are stored as points.
 
 ## Status
 - Works: everything above; desktop and phone layouts (bottom tab bar under 850 px); light/dark; right-click slider reset; Space/N/1–5 shortcuts; save/open/share/examples/drag-drop.
 - Verified (Nov 2026): fonts from every style/pen pass fontTools and OTS (the browsers' font sanitizer), with 80 characters (all letters in both cases, space and `! ' , - . ?`). An 8-minute speech-like track converts in about 14 s (4 s analysis, 10 s render) in headless Chromium, with phrase and syllable counts exact (190/190, 1544/1544). The JS heap peaks around 435 MB.
 - Known issues: the voice is a formant synthesizer. It's clear but not human-real. Next step is a neural voice (Piper, MIT, ONNX in the browser) fed with the IPA string, keeping the current effects on top and the synth as fallback. Check each Piper voice's licence before bundling. The build environment couldn't reach huggingface.co, so the models weren't tried yet. Long tracks near the 10-minute cap may be heavy for older phones.
 - Unverified: the .otf installing on macOS/Windows (it passes OTS, but no OS install was tried); mic recording on iOS Safari.
+
+## Word shapes (1.2.0)
+- `FREQ` weights every sound by how common it is across languages, times a per-language factor from the seed (`langWeights`), so each language has favourite sounds.
+- `CODA` lists the sounds allowed to end a syllable, weighted. Clicks never end one.
+- Clusters only rise in loudness: a stop or fricative plus l/r/ř/w/j. At most one click or catch (`c`, `ʔ`) per word, only after a vowel or at word start. Onsets are forced 93% of the time after a vowel, consonants aren't doubled across a join, and a syllable isn't repeated back to back.
+
+## Recordings (1.2.0)
+- `REC` per sound type: `hold` sounds (vowels, nasals, fricatives, glides, trill) play the steady middle of the clip at the synth's duration, and short ones (stops, clicks, catch) play whole, capped at 0.16 s.
+- Levels: each clip is scaled so its RMS = synth /a/ RMS for the current voice (`refLevel`, cached per voice) × `REC[type].level`. The levels are the synth's measured mix.
+- Hints (`recHint`) appear on the rec buttons, in the take order (bar = hold, dot = short) and as a toast when recording.
 
 ## Gotchas (hard-won)
 - **Levels are measured, not guessed.** `NOISE_TRIM` and the per-sound `ng` values put hiss 10–20 dB under the vowels (s −12, f −22, nasals −10 relative to /a/). Loudness normalises on the 98.5th percentile with tanh soft-clip. Peak normalising let clicks shrink the vowels and made speech sound like noise.

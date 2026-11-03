@@ -47,6 +47,17 @@ const PAL = [
 ];
 let gcur; PAL.forEach(p => { if (p.g) gcur = p.g; else p.g = gcur; });
 const PM = Object.fromEntries(PAL.map(p => [p.k, p]));
+// How each kind of sound is recorded and played back. "hold" sounds are trimmed to the length the word
+// needs; "short" ones play as recorded. level = loudness next to a vowel, from the synth's measured mix.
+const REC={V:{hold:1,level:1,hint:'hold it steady, about half a second'},
+  nasal:{hold:1,level:.32,hint:'hum it with your lips or tongue closed, about half a second'},
+  approx:{hold:1,level:.38,hint:'hold it as a steady glide, about half a second'},
+  trill:{hold:1,level:.36,hint:'roll it for about half a second'},
+  fric:{hold:1,level:.24,hint:'hiss or buzz it steadily, about half a second'},
+  stop:{hold:0,level:.22,hint:'just the pop, as short as you can, no vowel after it'},
+  click:{hold:0,level:.5,hint:'one sharp click'},
+  glottal:{hold:0,level:.12,hint:'the tiny catch in “uh-oh”, as short as you can'}};
+const recHint=k=>{ const p=PM[k]; return `say “${k}” (as in ${p.h.replace(/<\/?b>/g,'')}): ${REC[p.t].hint}`; };
 const isV = k => PM[k] && PM[k].t === 'V';
 const ENG44 = [['p','pin'],['b','bat'],['t','top'],['d','dog'],['k','cat'],['ɡ','go'],['f','fan'],['v','van'],['θ','thin'],['ð','this'],['s','sun'],['z','zoo'],['ʃ','ship'],['ʒ','measure'],['h','hat'],['tʃ','chip'],['dʒ','jam'],['m','man'],['n','no'],['ŋ','sing'],['l','leg'],['r','red'],['w','wet'],['j','yes'],
  ['ɪ','sit'],['e','bed'],['æ','cat'],['ʌ','cup'],['ɒ','hot'],['ʊ','book'],['ə','about'],['iː','see'],['ɑː','car'],['ɔː','saw'],['uː','blue'],['ɜː','bird'],['eɪ','day'],['aɪ','my'],['ɔɪ','boy'],['əʊ','go'],['aʊ','now'],['ɪə','near'],['eə','hair'],['ʊə','tour']];
@@ -87,20 +98,42 @@ function C(){ return L.inv.filter(k => !isV(k)); }
 function V(){ return L.inv.filter(isV); }
 function clusterSeconds(){ return C().filter(k => 'lrřwj'.includes(k)); }
 
-function makeSyl(r, first, prevEndsV){
-  const cs=C(), vs=V(); if (!vs.length) return '';
+/* Word shapes, generation 2. Rules borrowed from how real languages (and conlang word generators) behave:
+   - sounds are weighted: common ones (t k m n a i) turn up far more than rare ones (q ö clicks),
+     and every language gets its own favourites on top, so two languages with the same sounds still differ
+   - syllable endings use only sounds that sit well there (nasals, liquids, s, t, k…), never clicks
+   - clusters only rise in loudness (tr, pl, kw), as in most languages
+   - at most one click or catch per word, and only after a vowel or at the start
+   - vowels rarely collide across syllables, no doubled consonant across a join, no "tata" stutters */
+const FREQ={a:10,i:8,u:7,e:6,o:6,'ë':3,'ä':2,y:1.5,'ö':1.2,'ů':1,
+  t:9,k:9,m:9,n:9,p:7,s:7,l:6,j:6,w:6,b:5,d:5,g:5,h:5,r:5,'ŋ':4,f:4,v:3,z:3,'š':3,'ř':3,x:2,'ʔ':2,q:1.5,'ž':1.5,'þ':1.2,'ł':1,c:1};
+const CODA={n:4,m:3,l:3,'ŋ':2.5,r:2.5,s:2.5,t:1.5,k:1.5,'š':1.2,'ř':1,p:.8,j:.8,f:.6,x:.6,w:.6,z:.5,'ł':.5,d:.4,v:.4,b:.3,g:.3,'þ':.3,'ž':.3,'ʔ':.3,h:.2,q:.2};
+const HARD=k=>k==='c'||k==='ʔ';
+let wCacheKey='', wCache={};
+function langWeights(){ const key=L.seed+'|'+L.inv.join(''); if(key===wCacheKey) return wCache;
+  wCache={}; for(const k of L.inv){ const r=rngFrom(hash(L.seed+'~'+k)); wCache[k]=(FREQ[k]||1)*(.4+r()*1.2); } wCacheKey=key; return wCache; }
+function pickW(r, items, wf){ let tot=0; const ws=items.map(k=>{ const w=Math.max(0,wf(k)); tot+=w; return w; }); if(tot<=0) return pick(r,items);
+  let x=r()*tot; for(let i=0;i<items.length;i++){ x-=ws[i]; if(x<=0) return items[i]; } return items[items.length-1]; }
+function makeSyl(r, first, prev){
+  const W=langWeights(), cs=C(), vs=V(); if(!vs.length) return '';
+  const chars=[...prev], last=chars[chars.length-1]||'', prevV=last?isV(last):false;
   let s='';
-  const onsetP = cs.length ? L.onset : 0;
-  if (r() < onsetP || (!first && prevEndsV && cs.length && r() < .7)) {
-    const c1 = pick(r, cs); s += c1;
-    const cl = clusterSeconds().filter(k => k !== c1);
-    if (cl.length && PM[c1].t !== 'approx' && r() < L.cluster) s += pick(r, cl);
+  if(cs.length && (r()<L.onset || (prevV && r()<.93))){
+    let pool=cs.filter(k=>k!==last);
+    if(chars.some(HARD) || (last && !prevV)) pool=pool.filter(k=>!HARD(k));
+    if(pool.length){ const c1=pickW(r,pool,k=>W[k]); s+=c1;
+      const cl=clusterSeconds().filter(k=>k!==c1);
+      if(cl.length && (PM[c1].t==='stop'||PM[c1].t==='fric') && c1!=='h' && r()<L.cluster) s+=pickW(r,cl,k=>W[k]); }
   }
-  s += pick(r, vs);
-  if (cs.length && r() < L.coda) { const c = pick(r, cs.filter(k => k !== 'ʔ' || cs.length === 1)); if (c) s += c; }
+  const pv=[...chars].reverse().find(isV);
+  let vpool=(!s && prevV) ? vs.filter(v=>v!==last) : vs; if(!vpool.length) vpool=vs;
+  s+=pickW(r,vpool,k=>W[k]*(k===pv?.6:1));
+  if(cs.length && r()<L.coda){ const pool=cs.filter(k=>CODA[k]); if(pool.length) s+=pickW(r,pool,k=>W[k]*CODA[k]); }
   return s;
 }
-function makeWord(r, n){ let w=''; for(let i=0;i<n;i++){ w += makeSyl(r, i===0, w ? isV(w[w.length-1]) : false); } return w; }
+function makeWord(r, n){ let w='', lastSyl='';
+  for(let i=0;i<n;i++){ let syl, tries=0; do{ syl=makeSyl(r,i===0,w); tries++; } while(syl===lastSyl && tries<4); w+=syl; lastSyl=syl; }
+  return w; }
 function engSyl(w){ const m = w.match(/[aeiouy]+/g); let n = m ? m.length : 1; if (/[^aeiou]e$/.test(w) && n > 1) n--; return Math.max(1, n); }
 function normKey(w){ let s=w; if (s.length>3 && s.endsWith('e')) s=s.slice(0,-1); if (/([bcdfghjklmnpqrstvwxz])\1$/.test(s) && s.length>3) s=s.slice(0,-1); return s; }
 function root(w){
@@ -113,7 +146,8 @@ const AFFIX = [['PL','plural','-s','stars'],['PAST','past tense','-ed','walked']
 function affix(tag){
   const r = rngFrom(hash(L.seed + '#' + tag));
   const vs=V(), cs=C(); if(!vs.length) return '';
-  let s = pick(r, vs); if (cs.length && r() < .75) s += pick(r, cs);
+  const W=langWeights(); let s = pickW(r, vs, k=>W[k]);
+  const pool=cs.filter(k=>CODA[k]); if (pool.length && r() < .75) s += pickW(r, pool, k=>W[k]*CODA[k]);
   return s;
 }
 function lexRoot(stem){ if (L.lexicon[stem]) return L.lexicon[stem]; if (L.lexicon[stem+'e']) return L.lexicon[stem+'e']; return root(stem); }
@@ -168,7 +202,7 @@ function wordsToSegs(words, voice, t0=0.12){
       const sIdx = keys.findIndex(isV); const lastV = keys.length-1-[...keys].reverse().findIndex(isV);
       keys.forEach((k, ki) => {
         const p=PM[k]; const st = ki===sIdx;
-        let d = recs[k] ? recs[k].buf.duration : baseDur(p, st)/sp;
+        let d = baseDur(p, st)/sp; if (recs[k] && !REC[p.t].hold) d = Math.min(recs[k].buf.duration, .16);
         if (lastW && end && ki>=lastV) d *= 1.35;           // phrase-final lengthening
         d *= .92 + wr()*.16;                                 // no two syllables exactly alike
         let pitch = voice.pitch*decl*accent*(st?1.14:.97);
@@ -203,7 +237,14 @@ function smoothNoise(ctx, dur, rate, seed){ // slowly wandering random signal in
 }
 async function render(segs, dur, voice, extra={}){
   const led=document.getElementById('ledVoice'); led&&led.classList.add('on'); try{ return await renderInner(segs, dur, voice, extra); } finally { if(led&&!playing) led.classList.remove('on'); } }
+const refCache=new Map();
+function clipRms(buf){ const d=buf.getChannelData(0); let s=0; for(let i=0;i<d.length;i++) s+=d[i]*d[i]; return Math.sqrt(s/(d.length||1)); }
+async function refLevel(voice){ const key=JSON.stringify(voice); if(refCache.has(key)) return refCache.get(key);
+  const b=await renderInner([{k:'a',t:.05,d:.35,p:voice.pitch,a:1}], .45, voice, {raw:true,noRec:true});
+  const d=b.getChannelData(0), sr=b.sampleRate; let s=0,n=0; for(let i=Math.floor(sr*.12);i<Math.floor(sr*.36);i++){ s+=d[i]*d[i]; n++; }
+  const v=Math.sqrt(s/(n||1))||.1; refCache.set(key,v); return v; }
 async function renderInner(segs, dur, voice, extra={}){
+  if(!extra.noRec && Object.keys(recs).length && extra.ref==null) extra={...extra, ref:await refLevel({...DEFAULT.voice,...voice})};
   voice={...DEFAULT.voice, ...voice};
   const sr=44100, tail=voice.space>0 ? .2+voice.space*1.6 : 0;
   const ctx=new OfflineAudioContext(1, Math.ceil(sr*(dur+tail)), sr);
@@ -269,7 +310,15 @@ async function renderInner(segs, dur, voice, extra={}){
     if (!extra.pitchCurve) setP(s.p, t, .045);
     if (!s.k){ vAmp.gain.setTargetAtTime(0,t,.025); nAmp.gain.setTargetAtTime(0,t,.012); nasal(false,t); continue; }
     const p=PM[s.k];
-    if (recs[s.k]){ vAmp.gain.setTargetAtTime(0,t,.004); nAmp.gain.setTargetAtTime(0,t,.004); const b=ctx.createBufferSource(); b.buffer=recs[s.k].buf; const g=ctx.createGain(); g.gain.value=.9; b.connect(g).connect(mix); b.start(t); continue; }
+    if (recs[s.k] && !extra.noRec){ vAmp.gain.setTargetAtTime(0,t,.004); nAmp.gain.setTargetAtTime(0,t,.004);
+      // your voice, fitted into the word: held sounds take the steady middle of the clip at the length
+      // the word needs, short ones play whole; levelled so a recorded vowel matches a synth vowel
+      const rc=recs[s.k], kind=REC[p.t], cd=rc.buf.duration; rc.rms ??= clipRms(rc.buf);
+      const len=kind.hold ? Math.min(cd, d+.03) : cd, off=kind.hold ? Math.max(0,(cd-len)/2) : 0;
+      const lvl=Math.min(8, (extra.ref||.1)*kind.level/(rc.rms||.1)) * (kind.hold ? (s.a||1) : 1);
+      const b=ctx.createBufferSource(); b.buffer=rc.buf; const g=ctx.createGain(); const fade=Math.min(.015,len/4);
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(lvl,t+fade); g.gain.setValueAtTime(lvl,t+len-fade); g.gain.linearRampToValueAtTime(0,t+len);
+      b.connect(g).connect(mix); b.start(t,off,len); continue; }
     nasal(p.t==='nasal',t);
     switch(p.t){
       case 'V': setF(p.f,t); vAmp.gain.setTargetAtTime(s.a||1,t,.016); nAmp.gain.setTargetAtTime(0,t,.01); break;
@@ -510,7 +559,7 @@ function renderPalette(){
   const groups={}; PAL.forEach(p=>(groups[p.g]=groups[p.g]||[]).push(p));
   $('#palette').innerHTML=Object.entries(groups).map(([g,ps])=>`<div class="sgroup"><h3>${g.toLowerCase()}</h3><div class="sgrid">${ps.map(p=>{ const on=L.inv.includes(p.k);
     return `<div class="snd${on?' on':''}" data-k="${p.k}"><button type="button" class="main" aria-pressed="${on}" title="${on?'Remove from':'Add to'} your language"><span class="k">${p.k}</span><span class="ipa">/${p.ipa}/<span class="led"></span></span><span class="h">${p.h}</span></button>
-    <div class="tools"><button type="button" data-a="play" aria-label="Play ${p.k}" title="Play">▶</button><button type="button" data-a="rec" title="Record your voice for this sound">rec</button><button type="button" data-a="up" title="Use an audio file for this sound">file</button>${recs[p.k]?`<span class="mine"><span class="led p"></span>yours</span><button type="button" data-a="clr" aria-label="Remove your recording" title="Back to the synthetic voice">×</button>`:''}</div></div>`; }).join('')}</div></div>`).join('');
+    <div class="tools"><button type="button" data-a="play" aria-label="Play ${p.k}" title="Play">▶</button><button type="button" data-a="rec" title="${esc(recHint(p.k))}">rec</button><button type="button" data-a="up" title="Use an audio file for this sound">file</button>${recs[p.k]?`<span class="mine"><span class="led p"></span>yours</span><button type="button" data-a="clr" aria-label="Remove your recording" title="Back to the synthetic voice">×</button>`:''}</div></div>`; }).join('')}</div></div>`).join('');
   updateCounts();
 }
 let recTarget=null, micStop=null;
@@ -530,13 +579,13 @@ $('#palette').addEventListener('click', async e=>{
   if(a==='play'){ const w = isV(k) ? k+k : 'a'+k+'a'; play(await render(...(()=>{ const {segs,dur}=wordsToSegs([{al:w,end:'.'}],L.voice); return [segs,dur]; })(),L.voice)); }
   if(a==='up'){ recTarget=k; $('#fileRec').click(); }
   if(a==='clr'){ delete recs[k]; saveRecs(); renderPalette(); }
-  if(a==='rec'){ const btn=e.target; const ab=await micRecord(btn,1.6); if(ab) await setRec(k, ab); }
+  if(a==='rec'){ const btn=e.target; if(!micStop) toast('recording: '+recHint(k)); const ab=await micRecord(btn, REC[PM[k].t].hold?1.4:1); if(ab) await setRec(k, ab); }
 });
 $('#fileRec').addEventListener('change', async e=>{ const f=e.target.files[0]; e.target.value=''; if(f&&recTarget) await setRec(recTarget, await f.arrayBuffer()); });
 
 /* ---------- one take of every sound ---------- */
 const invOrder=()=>PAL.filter(p=>L.inv.includes(p.k)).map(p=>p.k);
-function renderTakeOrder(){ $('#takeOrder').innerHTML=invOrder().map((k,i)=>`<span><small>${i+1}</small>${esc(k)}</span>`).join(''); }
+function renderTakeOrder(){ $('#takeOrder').innerHTML=invOrder().map((k,i)=>{ const hold=REC[PM[k].t].hold; return `<span title="${esc(recHint(k))}"><small>${i+1}</small>${esc(k)}<i class="len ${hold?'hold':'short'}" aria-label="${hold?'hold':'short'}"></i></span>`; }).join(''); }
 function wavBytes(d, sr){ const n=d.length, b=new ArrayBuffer(44+n*2), v=new DataView(b); const w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
   w(0,'RIFF'); v.setUint32(4,36+n*2,true); w(8,'WAVE'); w(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,'data'); v.setUint32(40,n*2,true);
   for(let i=0;i<n;i++) v.setInt16(44+i*2,Math.max(-1,Math.min(1,d[i]))*32767,true); return b; }
@@ -742,7 +791,7 @@ chipGroup($('#vPreset'), Object.fromEntries(Object.keys(PRESETS).map(n=>[n,n.toL
 const setPct=el=>el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');
 $$('input.fad').forEach(el=>{ setPct(el); el.addEventListener('input',()=>setPct(el)); });
 let statusHold=0;
-function sideLcd(){ if(Date.now()<statusHold) return; const el=$('#statusLine'); if(!el) return; const c=C().length,v=V().length; const pr=presetOf();
+function sideLcd(){ $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); if(Date.now()<statusHold) return; const el=$('#statusLine'); if(!el) return; const c=C().length,v=V().length; const pr=presetOf();
   el.textContent=`${(L.name||'unnamed').toLowerCase()} · ${c+v} sounds · ${v} vowels · voice ${pr?pr.toLowerCase():'custom'} · script ${(STYLES[L.style]||'').split(':')[0].toLowerCase()}`;
   $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); }
 function setStatus(msg){ $('#statusLine').textContent=msg; statusHold=Date.now()+4000; setTimeout(sideLcd,4100); }

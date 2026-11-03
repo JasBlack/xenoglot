@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="1.1.0">
+<body data-ui="dark" data-tool="xenoglot" data-version="1.2.0">
 <header class="topbar">
   <div class="hl">
     <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
@@ -109,6 +109,7 @@
   <div class="panel">
     <h2><span><i>3</i>your own voice</span><span>optional</span></h2>
     <p class="hint">Say every sound below in order, with about half a second of silence between each. Xenoglot cuts the take into single sounds. If your browser blocks the microphone here, record on your phone and use <b>upload a take</b>.</p>
+    <div class="lenkey"><span><i class="len hold" style="display:inline-block;width:14px;height:3px;border-radius:2px;background:var(--accent2)"></i>hold it, about half a second</span><span><i style="display:inline-block;width:3px;height:3px;border-radius:50%;background:var(--accent2)"></i>keep it short, no vowel after</span></div>
     <div class="takeorder" id="takeOrder"></div>
     <div class="kgrid"><button type="button" class="key ink" id="takeRec"><span class="dot"></span> record a take</button><button type="button" class="key" id="takeBtn">upload a take</button></div>
     <div class="lcd" id="takeStatus"></div>
