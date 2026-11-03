@@ -20,7 +20,7 @@ A JAS.BLACK console tool for inventing a spoken language on English grammar: sou
 ## Commands
 - Run: `python3 -m http.server 8000` → http://localhost:8000
 - Debug hooks: add `?debug` to the URL to get `window.__xg` (`getLang`, `setTrim`, `run`) for measuring levels.
-- Test: `npm install && npx playwright install chromium && npm test` (17 checks, including the .wav and .otf downloads)
+- Test: `npm install && npx playwright install chromium && npm test` (19 checks, including the .wav and .otf downloads, the length estimate and fit to a length)
 
 ## Deployment
 GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `JasBlack/xenoglot`, MIT.
@@ -53,6 +53,10 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Input: the language's IPA from `PM[k].ipa`, `ˈ` before each word, phrases ended with `, . ?`. IDs = `^ _ p1 _ p2 _ … $` from the voice's `phoneme_id_map`. Every IPA symbol Xenoglot uses (including ǀ) is in the map.
 - Effects: pitch and throat size become one resample rate (`(pitch/voicePitch)^0.6 × formant^0.8`, clamped 0.5–2). `length_scale = rate / speed` keeps the speed right. Roughness feeds `noise_scale`/`noise_w`. Warble = LFO on detune. Many voices = two detuned, delayed copies. Metallic and space reuse the synth's ring mod and reverb.
 - `speakWords` routes speech through the chosen engine and falls back to the synth on any error. Sound previews use it too. `render` (the synth) is still called directly for audio-track conversion.
+
+## Length estimate and fit (1.4.0)
+- The built-in length is exact from `wordsToSegs(...).dur` (+ reverb tail `tailOf(voice)`). The natural length = built-in length × `pace.len[engine]`, a ratio learned after every natural result. "Ready in" = spoken length × `pace.work[engine]` (seconds per pass per second of audio) × `pace.passes` when fitting a natural voice. `pace` persists in `xenoglot-v1-pace`.
+- Fit to a length: `fitSpeed` finds the speed multiplier, clamped 0.5–2× (the slider range only offers lengths inside that). For the built-in voice it converges on the exact length using `wordsToSegs` (no rendering). The natural voice gets one correction pass, with `noise_w` held at 0.1 while fitting (Piper's timing is random otherwise), then is padded with silence if short. Measured: built-in 8.0/8.0 s and 20/20 s; natural 8.0/8.0 s and 16/16 s.
 
 ## Gotchas (hard-won)
 - **Levels are measured, not guessed.** `NOISE_TRIM` and the per-sound `ng` values put hiss 10–20 dB under the vowels (s −12, f −22, nasals −10 relative to /a/). Loudness normalises on the 98.5th percentile with tanh soft-clip. Peak normalising let clicks shrink the vowels and made speech sound like noise.

@@ -8,7 +8,7 @@ Build a new spoken language on top of English grammar, entirely in your browser.
 
 1. **Sounds**: choose your language's sounds from 37 (vowels, stops, hisses, clicks, rolled r…) and give them a voice. Pick the **built-in** synthesizer or a **natural** neural voice (female or male), then a character: ten presets go from a plain voice to a giant, a whispering spirit or a hive choir. You can replace any sound with your own voice, and each sound tells you how to record it.
 2. **Words**: every English word gets a permanent new word built from your sounds. Grammar stays English: same word order, and plural, past tense, *-ing*, possessive, *n't* and *-ly* become fixed endings. Edit any word in the dictionary.
-3. **Translate**: type English and get the new language written in Latin letters, in its own script and as pronunciation (IPA). Hear it and save the audio as a .wav file.
+3. **Translate**: type English and get the new language written in Latin letters, in its own script and as pronunciation (IPA). As you type it shows how long the speech will be and how long it takes to make. Turn on **fit to a length** to pick an exact length: the voice speeds up or slows down to match, within half to double speed. Hear it and save the audio as a .wav file.
 4. **Audio**: drop in a recording of English speech. Xenoglot reads its phrases, rhythm and melody and re-voices it in your language with the same timing. Paste the words spoken for a true translation.
 5. **Script**: generate an alphabet (14 styles, 4 pens, weirdness and slant), redraw any letter by hand, and download it as an installable font (.otf, with capitals and basic punctuation) or an alphabet chart (.svg).
 

@@ -39,6 +39,17 @@ try {
   await p.waitForFunction(() => /s of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
   check(true, 'speech renders');
   await p.click('#tStop');
+  const est = await p.textContent('#tEst');
+  const made = await p.textContent('#tStatus');
+  check(/≈ .+ of speech · ready in about/.test(est) && est.match(/≈ ([\d.]+) s/)?.[1] === made.match(/^([\d.]+) s/)?.[1], 'length estimate matches the built-in voice');
+  await p.click('label:has(#fitOn)');
+  await p.fill('#fitSecs', '8'); await p.dispatchEvent('#fitSecs', 'input');
+  await p.evaluate(() => { document.querySelector('#tStatus').textContent = ''; });
+  await p.click('#tSpeak');
+  await p.waitForFunction(() => /of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
+  await p.click('#tStop');
+  check(/^8\.0 s of speech \(asked for 8\.0 s\)/.test(await p.textContent('#tStatus')), 'fit to a length lands 8 s exactly');
+  await p.click('label:has(#fitOn)');
   const [audio] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveAudio')]);
   const wav = await readFile(await audio.path());
   check(audio.suggestedFilename().endsWith('.wav') && wav.subarray(0, 4).toString('latin1') === 'RIFF' && wav.length > 44100, 'speech saves as a .wav file');

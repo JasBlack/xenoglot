@@ -381,7 +381,7 @@ async function piperVoice(id){
     const cfg=JSON.parse(new TextDecoder().decode(await fetchCached(v.url+'.onnx.json')));
     const model=await fetchCached(v.url+'.onnx',(g,t)=>naturalStatus(t>1?`downloading ${v.label}: ${(g/1e6).toFixed(0)} / ${(t/1e6).toFixed(0)} MB (once, then it works offline)`:'loading the voice…'));
     naturalStatus('starting the voice…'); const sess=await O.InferenceSession.create(model,{executionProviders:['wasm']});
-    naturalStatus(`${v.label} ready`); return {sess,cfg,O};
+    naturalStatus(`${v.label} ready`); voiceReady[id]=true; setTimeout(updateEst); return {sess,cfg,O};
   }catch(e){ delete piper[id]; naturalStatus(''); throw e; } })(); }
 // phrases of IPA, stress on each word's first syllable, punctuation kept for phrasing
 function ipaPhrases(words){ const out=[]; let cur=[];
@@ -395,7 +395,8 @@ async function speakNatural(words, voice){
   // pitch and throat size both move the voice by resampling, so speed is compensated through length_scale
   const rate=Math.min(2,Math.max(.5, Math.pow(voice.pitch/v.pitch,.6)*Math.pow(voice.formant,.8)));
   const lengthScale=Math.min(2.5,Math.max(.4, rate/voice.speed));
-  const noise=.35+voice.jitter*.6, noiseW=.4+voice.jitter*.8;
+  // noise_w varies the timing at random; when fitting a length it's held low so a correction pass lands
+  const noise=.35+voice.jitter*.6, noiseW=voice.fitting ? .1 : .4+voice.jitter*.8;
   const chunks=[];
   for(const ph of ipaPhrases(words)){ const ids=phonemeIds(ph.ipa,cfg); if(ids.length<4) continue;
     const feeds={ input:new O.Tensor('int64',BigInt64Array.from(ids.map(BigInt)),[1,ids.length]),
@@ -426,15 +427,16 @@ async function naturalFx(raw, srIn, voice, rate){
     const cv=ctx.createConvolver(); cv.buffer=ir; const wg=ctx.createGain(); wg.gain.value=voice.space*.55; out.connect(cv).connect(wg).connect(ctx.destination); }
   const b=await ctx.startRendering(); normalise(b.getChannelData(0)); return b;
 }
-async function speakWords(words){
+async function speakWords(words, speedMul=1, fitting=false){
+  const voice={...L.voice, speed:L.voice.speed*speedMul, fitting};
   if(L.engine && NATURAL[L.engine]){
     if(Object.keys(recs).length && !speakWords.warned){ speakWords.warned=true; toast('The natural voice doesn’t use your recordings. Pick built-in to hear them.'); }
     const led=$('#ledVoice'); led&&led.classList.add('on');
-    try{ return await speakNatural(words, L.voice); }
+    try{ return await speakNatural(words, voice); }
     catch(e){ toast(e.message||'The natural voice failed, so the built-in voice is speaking.'); }
     finally{ if(led&&!playing) led.classList.remove('on'); }
   }
-  const {segs,dur}=wordsToSegs(words, L.voice); return render(segs,dur,L.voice);
+  const {segs,dur}=wordsToSegs(words, voice); return render(segs,dur,voice);
 }
 
 
@@ -731,10 +733,56 @@ function renderTranslate(){
   sc.innerHTML=toks.filter(t=>t.t!=='sp').map(t=>t.t==='w'?wordSVG(t.al,rtl):t.t==='nl'?'<span style="flex-basis:100%"></span>':`<span class="pn">${esc(t.s)}</span>`).join('');
   $('#outIpa').textContent='/'+toks.filter(t=>t.t==='w').map(t=>ipaOf(t.al)).join(' ')+'/';
   $('#tName').textContent='into '+(L.name||'your language').toLowerCase();
+  updateEst();
 }
 const romanText=()=>(lastT||[]).map(t=>t.t==='w'?t.al:t.t==='nl'?'\n':t.t==='sp'?' ':t.s).join('');
 let tBuf=null;
-async function getTBuf(){ if(!tBuf){ $('#tStatus').textContent='synthesizing…'; setStatus('synthesizing…'); tBuf=await speakWords(tokensToWords(lastT)); $('#tStatus').textContent=`${tBuf.duration.toFixed(1)} s of speech`; setStatus(`${tBuf.duration.toFixed(1)} s of speech`); } return tBuf; }
+/* ---------- length: an estimate as you type, and "fit to a length" ----------
+   The built-in voice's length is known exactly from wordsToSegs. The natural voice's length is that times a
+   learned ratio, refined after every real result, as is the time each engine takes to make a second of audio. */
+const tailOf=v=>v.space>0 ? .2+v.space*1.6 : 0;
+const pace={len:{synth:1,kristin:.82,norman:.66}, work:{synth:.08,kristin:.45,norman:.55}, passes:1.6}; // work = seconds per pass per second of audio; passes = average natural passes when fitting
+try{ const s=JSON.parse(store.get('xenoglot-v1-pace')||'null'); if(s&&s.len&&s.work){ Object.assign(pace.len,s.len); Object.assign(pace.work,s.work); } }catch(e){}
+const engineNow=()=>NATURAL[L.engine] ? L.engine : 'synth';
+const fmtS=s=>s<60 ? (s<10?s.toFixed(1):Math.round(s))+' s' : Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0');
+const fit={on:false, secs:0};
+const builtinLen=(words,voice)=>wordsToSegs(words,voice).dur;          // spoken length with the built-in voice
+function fitSpeed(words){ // speed multiplier that lands the chosen length, kept to 0.5–2× so it still sounds natural
+  const eng=engineNow(), tail=tailOf(L.voice), want=Math.max(.3, fit.secs-tail-(eng==='synth'?0:.1));
+  let m=Math.min(2,Math.max(.5, builtinLen(words,L.voice)*pace.len[eng]/want));
+  if(eng==='synth') for(let i=0;i<4;i++){ const got=builtinLen(words,{...L.voice,speed:L.voice.speed*m}); m=Math.min(2,Math.max(.5, m*got/want)); } // the built-in length is exact, so converge on it
+  return m; }
+let voiceReady={};
+async function checkVoiceCache(){ for(const id of Object.keys(NATURAL)){ if(voiceReady[id]) continue; try{ const c=await caches.open(VOICE_CACHE); voiceReady[id]=!!(await c.match(NATURAL[id].url+'.onnx')); }catch(e){} } updateEst(); }
+function updateEst(){ const el=$('#tEst'); if(!el) return; const words=tokensToWords(lastT||[]);
+  if(!words.length){ el.textContent='type some english to hear it'; return; }
+  const eng=engineNow(), tail=tailOf(L.voice), m=fit.on?fitSpeed(words):1;
+  const spoken=builtinLen(words,{...L.voice,speed:L.voice.speed*m})*pace.len[eng], total=spoken+tail+(eng==='synth'?0:.1);
+  const work=Math.max(.3, spoken*pace.work[eng]*(fit.on&&eng!=='synth'?pace.passes:1));
+  const first=eng!=='synth' && !piper[eng] && !voiceReady[eng] ? ` + a one-time ${NATURAL[eng].mb} MB voice download` : (eng!=='synth' && !piper[eng] ? ' + about 12 s to start the voice' : '');
+  el.textContent=`≈ ${fmtS(total)} of speech${fit.on?` · speed ×${(L.voice.speed*m).toFixed(2)}`:''} · ready in about ${fmtS(work)}${first}`;
+  const r=$('#fitSecs'); if(r){ const base=builtinLen(words,L.voice)*pace.len[eng]; const lo=Math.max(.5,Math.floor((base/2+tail)*2)/2), hi=Math.max(lo+.5,Math.ceil((base*2+tail)*2)/2);
+    r.min=lo; r.max=hi; if(!fit.secs||fit.secs<lo||fit.secs>hi){ fit.secs=Math.min(hi,Math.max(lo,Math.round(total*2)/2)); } r.value=fit.secs; paintRange(r); $('#oFit').textContent=fmtS(fit.secs); } }
+async function makeSpeech(){
+  const words=tokensToWords(lastT||[]); const eng=engineNow(), t0=performance.now();
+  let m=fit.on?fitSpeed(words):1, buf=await speakWords(words,m,fit.on), passes=1;
+  const spokenOf=b=>b.duration-tailOf(L.voice)-(eng==='synth'?0:.1);
+  if(eng!=='synth' && NATURAL[L.engine]){
+    const predicted=builtinLen(words,{...L.voice,speed:L.voice.speed*m});
+    pace.len[eng]=pace.len[eng]*.5+(spokenOf(buf)/predicted)*.5;                   // learn this voice's pace
+    if(fit.on){ const want=fit.secs-tailOf(L.voice)-.1, got=spokenOf(buf);
+      if(Math.abs(got-want)/fit.secs>.02){ m=Math.min(2,Math.max(.5,m*got/want)); buf=await speakWords(words,m,true); passes=2; }   // one correction pass
+      pace.passes=pace.passes*.6+passes*.4;
+      const short=fit.secs-buf.duration; if(short>.02){ const ctx=getCtx(); const nb=ctx.createBuffer(1,Math.round((buf.duration+short)*buf.sampleRate),buf.sampleRate); nb.copyToChannel(buf.getChannelData(0),0); buf=nb; } } }
+  const secs=(performance.now()-t0)/1000; pace.work[eng]=pace.work[eng]*.5+(secs/passes/Math.max(.5,buf.duration))*.5;
+  store.set('xenoglot-v1-pace',JSON.stringify(pace)); updateEst();
+  return {buf,secs}; }
+async function getTBuf(){ if(!tBuf){ $('#tStatus').textContent='synthesizing…'; setStatus('synthesizing…');
+    const {buf,secs}=await makeSpeech(); tBuf=buf;
+    const msg=`${fmtS(tBuf.duration)} of speech${fit.on?` (asked for ${fmtS(fit.secs)})`:''} · made in ${fmtS(secs)}`;
+    $('#tStatus').textContent=msg; setStatus(msg); } return tBuf; }
+$('#fitOn').addEventListener('change',e=>{ fit.on=e.target.checked; $('#fitCtl').hidden=!fit.on; $('#fitHint').hidden=!fit.on; if(fit.on) fit.secs=0; tBuf=null; updateEst(); });
+$('#fitSecs').addEventListener('input',e=>{ fit.secs=+e.target.value; tBuf=null; updateEst(); });
 $('#tSpeak').addEventListener('click',async()=>{ getCtx(); play(await getTBuf(),$('#waveT')); });
 $('#tStop').addEventListener('click',stopAudio);
 $('#tSaveAudio').addEventListener('click',async()=>exportAudio(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
@@ -880,7 +928,7 @@ chipGroup($('#vEngine'), ENGINES, 'synth', async id=>{ L.engine=id; tBuf=null; s
 const setPct=el=>el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');
 $$('input.fad').forEach(el=>{ setPct(el); el.addEventListener('input',()=>setPct(el)); });
 let statusHold=0;
-function sideLcd(){ $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); if(Date.now()<statusHold) return; const el=$('#statusLine'); if(!el) return; const c=C().length,v=V().length; const pr=presetOf();
+function sideLcd(){ $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); if(lastT) updateEst(); if(Date.now()<statusHold) return; const el=$('#statusLine'); if(!el) return; const c=C().length,v=V().length; const pr=presetOf();
   el.textContent=`${(L.name||'unnamed').toLowerCase()} · ${c+v} sounds · ${v} vowels · voice ${pr?pr.toLowerCase():'custom'} · script ${(STYLES[L.style]||'').split(':')[0].toLowerCase()}`;
   $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); }
 function setStatus(msg){ $('#statusLine').textContent=msg; statusHold=Date.now()+4000; setTimeout(sideLcd,4100); }
@@ -1033,7 +1081,7 @@ $('#enText').value=store.get('xenoglot-v1-text')||'The travelers walked slowly i
   }
   if(!shared||!L.id){ const cur=lib.current&&lib.langs[lib.current];
     if(cur) await useLang(cur); else await useLang(structuredClone(DEFAULT),{fresh:true}); }
-  loadExamples();
+  loadExamples(); checkVoiceCache();
 })();
 addEventListener('resize',()=>{ drawWave($('#waveT'),tBuf,-1); if(dBuf) drawWave($('#waveD'),dBuf,-1); });
 })();
