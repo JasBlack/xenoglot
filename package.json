@@ -1,6 +1,6 @@
 {
   "name": "xenoglot",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "Build a new spoken language on English grammar, in the browser.",
   "license": "MIT",

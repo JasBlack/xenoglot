@@ -4,7 +4,8 @@ A JAS.BLACK console tool for inventing a spoken language on English grammar: sou
 
 ## Stack
 - Static site, no build step: `index.html`, `style.css`, `app.js` (one IIFE, plain JS).
-- Web Audio `OfflineAudioContext` formant synthesizer (no samples). Audio saves as `.wav` (instant, `wavBytes`); `MediaRecorder` only for mic takes and the claude.ai-artifact fallback.
+- Web Audio `OfflineAudioContext` formant synthesizer (no samples). Audio saves as `.wav` (instant, `wavBytes`) or `.mp3` for sharing (`exportMp3`; WhatsApp won't play .wav inline). `MediaRecorder` only for mic takes and the claude.ai-artifact fallback.
+- `.mp3`: `vendor/lame/lame.min.js` = lamejs 1.2.1 (LGPL-3.0, kept as an unmodified separate file so the rest stays MIT), loaded lazily. 128 kbps mono at the buffer's rate (resampled to 44.1 kHz if lamejs can't take it). Measured: a 14 s sentence becomes 223 KB (the .wav is 1.2 MB); an 8-minute track encodes in 12 s to 7.7 MB. ffprobe reads both with exact durations. M4A was considered, but browsers only encode AAC where the OS has an encoder (not Linux, not Firefox).
 - `vendor/opentype.min.js` 1.3.4 (MIT) builds the font. Vendored, no runtime CDN.
 - Natural voices: `vendor/ort/` = onnxruntime-web 1.20.1 wasm-only build (MIT; `ort.wasm.min.js`, `ort-wasm-simd-threaded.mjs`/`.wasm`, about 11 MB), loaded only when a natural voice is picked. It runs inference in a web worker (`ort.env.wasm.proxy=true`). Piper and Kokoro models are fetched from Hugging Face on demand (CORS allowed) and kept in Cache Storage `xenoglot-voices-v1`. Optional: the synth is the fallback, so this doesn't break the no-runtime-CDN rule for anything essential.
 - Google Fonts: IBM Plex Mono, Archivo (family title) and Charis SIL (only for the language's own text, because it carries the IPA letters). Not essential; fallbacks are set.
@@ -20,7 +21,7 @@ A JAS.BLACK console tool for inventing a spoken language on English grammar: sou
 ## Commands
 - Run: `python3 -m http.server 8000` → http://localhost:8000
 - Debug hooks: add `?debug` to the URL to get `window.__xg` (`getLang`, `setTrim`, `run`) for measuring levels.
-- Test: `npm install && npx playwright install chromium && npm test` (19 checks, including the .wav and .otf downloads, the length estimate and fit to a length)
+- Test: `npm install && npx playwright install chromium && npm test` (20 checks, including the .wav, .mp3 and .otf downloads, the length estimate and fit to a length)
 
 ## Deployment
 GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `JasBlack/xenoglot`, MIT.

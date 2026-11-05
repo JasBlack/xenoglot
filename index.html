@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="1.5.0">
+<body data-ui="dark" data-tool="xenoglot" data-version="1.6.0">
 <header class="topbar">
   <div class="hl">
     <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
@@ -189,7 +189,7 @@
     <div class="outblock"><div class="label">written</div><div class="roman" id="outRoman"></div></div>
     <div class="outblock"><div class="label">in your script</div><div class="script well" id="outScript"></div></div>
     <div class="outblock"><div class="label">pronunciation (ipa)</div><div class="ipaline" id="outIpa"></div></div>
-    <div class="btnrow"><button type="button" class="key ink" id="tSaveAudio">save audio</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
+    <div class="btnrow"><button type="button" class="key ink" id="tSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="tSaveAudio" title="Full quality, for editing">save .wav</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
     <div class="lcd" id="tStatus"></div>
   </div>
   <div class="nextrow"><a class="key primary tall" href="#audio">next: audio <span aria-hidden="true">&rsaquo;</span></a></div>
@@ -219,7 +219,7 @@
       <button type="button" class="stopkey" id="dStop" aria-label="Stop" title="Stop">&#x25A0;</button>
     </div>
     <div class="roman" id="dRoman" style="font-size:17px"></div>
-    <button type="button" class="key ink" id="dSave">save audio</button>
+    <div class="btnrow"><button type="button" class="key ink" id="dSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="dSave" title="Full quality, for editing">save .wav</button></div>
     <div class="lcd" id="dStatus"></div>
   </div>
   <div class="nextrow"><a class="key primary tall" href="#script">next: script <span aria-hidden="true">&rsaquo;</span></a></div>

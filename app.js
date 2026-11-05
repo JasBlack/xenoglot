@@ -515,6 +515,24 @@ async function exportAudio(buf, base, statusEl){
   await done; statusEl.textContent='';
   await saveFile(`${base}.${ty[1]}`, new Blob(chunks,{type:ty[0]}));
 }
+// .mp3 for sharing: plays inline in WhatsApp, messages and on any phone, which .wav doesn't.
+// lamejs (LGPL-3.0, vendored as a separate file) loads only when it's first needed.
+let lamePromise=null;
+function loadLame(){ return lamePromise ??= new Promise((res,rej)=>{ if(window.lamejs) return res(window.lamejs);
+  const s=document.createElement('script'); s.src='vendor/lame/lame.min.js'; s.onload=()=>res(window.lamejs);
+  s.onerror=()=>{ lamePromise=null; rej(new Error('The mp3 encoder didn’t load. Check your connection and try again.')); }; document.head.appendChild(s); }); }
+async function mp3Blob(buf){ const lame=await loadLame();
+  const okRates=[48000,44100,32000,24000,22050,16000], sr=okRates.includes(buf.sampleRate)?buf.sampleRate:44100;
+  let d=buf.getChannelData(0);
+  if(sr!==buf.sampleRate){ const ratio=buf.sampleRate/sr, n=Math.floor(d.length/ratio), o=new Float32Array(n); for(let i=0;i<n;i++){ const x=i*ratio, j=Math.floor(x), f=x-j; o[i]=(d[j]||0)*(1-f)+(d[j+1]||0)*f; } d=o; }
+  const pcm=new Int16Array(d.length); for(let i=0;i<d.length;i++){ const v=Math.max(-1,Math.min(1,d[i])); pcm[i]=v<0?v*32768:v*32767; }
+  const enc=new lame.Mp3Encoder(1, sr, 128), parts=[];
+  for(let i=0;i<pcm.length;i+=1152){ const out=enc.encodeBuffer(pcm.subarray(i,i+1152)); if(out.length) parts.push(new Uint8Array(out)); if(i%(1152*400)===0) await new Promise(r=>setTimeout(r)); }
+  const end=enc.flush(); if(end.length) parts.push(new Uint8Array(end));
+  return new Blob(parts,{type:'audio/mpeg'}); }
+async function exportMp3(buf, base, statusEl){ stopAudio(); statusEl.textContent=`saving ${buf.duration.toFixed(1)} s as .mp3…`;
+  try{ const blob=await mp3Blob(buf); statusEl.textContent=''; await saveFile(`${base}.mp3`, blob); }
+  catch(e){ statusEl.textContent=''; toast(e.message||'The mp3 couldn’t be made. Save the .wav instead.'); } }
 const slug = s => (s||'language').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'language';
 
 /* ---------- recordings ---------- */
@@ -812,6 +830,9 @@ $('#fitSecs').addEventListener('input',e=>{ fit.secs=+e.target.value; tBuf=null;
 $('#tSpeak').addEventListener('click',async()=>{ getCtx(); play(await getTBuf(),$('#waveT')); });
 $('#tStop').addEventListener('click',stopAudio);
 $('#tSaveAudio').addEventListener('click',async()=>exportAudio(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
+$('#tSaveMp3').addEventListener('click',async()=>exportMp3(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
+// inside a claude.ai artifact the download allowlist has no .mp3, so only the .wav button (recorded .webm there) is offered
+if(window.claude && window.claude.use){ $('#tSaveMp3').hidden=true; $('#dSaveMp3').hidden=true; $('#tSaveAudio').textContent='save audio'; $('#dSave').textContent='save audio'; }
 $('#tCopy').addEventListener('click',()=>{ const s=romanText(); navigator.clipboard.writeText(s).then(()=>toast('Copied'),()=>{ const r=document.createRange(); r.selectNodeContents($('#outRoman')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Selected. Press Ctrl+C or ⌘C to copy.'); }); });
 $('#tSaveTxt').addEventListener('click',()=>saveFile(slug(L.name)+'.txt', `${L.name}\n\n${romanText()}\n\nIPA: ${$('#outIpa').textContent}\n\nEnglish:\n${$('#enText').value}\n`));
 ['#enText','#keepNames',...$$('input[name=dir]').map(x=>x)].forEach(s=>(typeof s==='string'?$(s):s).addEventListener('input',()=>{ renderTranslate(); store.set('xenoglot-v1-text',$('#enText').value); }));
@@ -879,6 +900,7 @@ $('#dGo').addEventListener('click',async()=>{
 $('#dPlay').addEventListener('click',()=>dBuf&&play(dBuf,$('#waveD')));
 $('#dStop').addEventListener('click',stopAudio);
 $('#dSave').addEventListener('click',()=>dBuf&&exportAudio(dBuf, slug(L.name)+'-'+slug(track.name.replace(/\.[^.]+$/,'')), $('#dStatus')));
+$('#dSaveMp3').addEventListener('click',()=>dBuf&&exportMp3(dBuf, slug(L.name)+'-'+slug(track.name.replace(/\.[^.]+$/,'')), $('#dStatus')));
 
 /* ---------- UI: script ---------- */
 let selK=null, cur=null;
