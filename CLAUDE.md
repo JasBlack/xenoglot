@@ -6,7 +6,7 @@ A JAS.BLACK console tool for inventing a spoken language on English grammar: sou
 - Static site, no build step: `index.html`, `style.css`, `app.js` (one IIFE, plain JS).
 - Web Audio `OfflineAudioContext` formant synthesizer (no samples). Audio saves as `.wav` (instant, `wavBytes`); `MediaRecorder` only for mic takes and the claude.ai-artifact fallback.
 - `vendor/opentype.min.js` 1.3.4 (MIT) builds the font. Vendored, no runtime CDN.
-- Natural voice: `vendor/ort/` = onnxruntime-web 1.20.1 wasm-only build (MIT; `ort.wasm.min.js`, `ort-wasm-simd-threaded.mjs`/`.wasm`, about 11 MB), loaded only when a natural voice is picked. Piper models are fetched from Hugging Face on demand (CORS allowed) and kept in Cache Storage `xenoglot-voices-v1`. Optional: the synth is the fallback, so this doesn't break the no-runtime-CDN rule for anything essential.
+- Natural voices: `vendor/ort/` = onnxruntime-web 1.20.1 wasm-only build (MIT; `ort.wasm.min.js`, `ort-wasm-simd-threaded.mjs`/`.wasm`, about 11 MB), loaded only when a natural voice is picked. It runs inference in a web worker (`ort.env.wasm.proxy=true`). Piper and Kokoro models are fetched from Hugging Face on demand (CORS allowed) and kept in Cache Storage `xenoglot-voices-v1`. Optional: the synth is the fallback, so this doesn't break the no-runtime-CDN rule for anything essential.
 - Google Fonts: IBM Plex Mono, Archivo (family title) and Charis SIL (only for the language's own text, because it carries the IPA letters). Not essential; fallbacks are set.
 
 ## Folder map
@@ -53,6 +53,15 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Input: the language's IPA from `PM[k].ipa`, `ˈ` before each word, phrases ended with `, . ?`. IDs = `^ _ p1 _ p2 _ … $` from the voice's `phoneme_id_map`. Every IPA symbol Xenoglot uses (including ǀ) is in the map.
 - Effects: pitch and throat size become one resample rate (`(pitch/voicePitch)^0.6 × formant^0.8`, clamped 0.5–2). `length_scale = rate / speed` keeps the speed right. Roughness feeds `noise_scale`/`noise_w`. Warble = LFO on detune. Many voices = two detuned, delayed copies. Metallic and space reuse the synth's ring mod and reverb.
 - `speakWords` routes speech through the chosen engine and falls back to the synth on any error. Sound previews use it too. `render` (the synth) is still called directly for audio-track conversion.
+
+## Kokoro (1.5.0)
+- `NATURAL.heart` / `NATURAL.michael` (`kind:'kokoro'`): one shared model `onnx/model_quantized.onnx` (q8, 92 MB; sessions are shared per model URL in `sessions`), plus `voices/af_heart.bin` / `am_michael.bin` (510×256 float32 style vectors, 0.5 MB each). `tokenizer.json`'s `model.vocab` maps IPA symbols to ids.
+- Inputs: `input_ids` = `[0, ids…, 0]` (≤ 512), `style` = row `min(len−2, 509)` of the voice file, `speed` = `1/length_scale`. Output `waveform`, 24 kHz. It's deterministic, so fitting a length lands without extra randomness control.
+- Sounds: Kokoro writes g as `ɡ` (U+0261). It has no ɬ or ǀ, so `KOKORO_SUB` maps them to ʃ and t. Everything else Xenoglot uses is in its vocab.
+- Licence: Apache 2.0, voices included. Other good Kokoro voices: af_bella, af_nicole, bf_emma, am_fenrir, bm_george.
+- Measured in headless Chromium (single-thread wasm in a worker; models served locally): Kokoro female 12 s of speech in 18 s, male 14 s in 29 s. Piper is far faster (11 s in 1.7 s). The page's longest freeze while loading or speaking is about 0.1 s. Before the worker, the page froze for several seconds per phrase.
+- Faster Kokoro would need multithreaded wasm (needs cross-origin isolation, which GitHub Pages can't set without a service-worker workaround) or the WebGPU build (bigger runtime). Neither is done yet.
+- The voice sample played when a voice is picked is kept short (`playSample`), because anything asked for while a slow voice works waits behind it.
 
 ## Length estimate and fit (1.4.0)
 - The built-in length is exact from `wordsToSegs(...).dur` (+ reverb tail `tailOf(voice)`). The natural length = built-in length × `pace.len[engine]`, a ratio learned after every natural result. "Ready in" = spoken length × `pace.work[engine]` (seconds per pass per second of audio) × `pace.passes` when fitting a natural voice. `pace` persists in `xenoglot-v1-pace`.

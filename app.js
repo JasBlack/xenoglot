@@ -355,16 +355,24 @@ function normalise(d){ const n=d.length, step=Math.max(1,Math.floor(n/60000)), a
 /* ---------- natural voice: Piper neural voices, run in the browser with onnxruntime-web ----------
    The voice reads the language's IPA directly (no English spelling step). Models are public-domain Piper
    voices on Hugging Face, downloaded once and kept in Cache Storage. The built-in synth stays as the fallback. */
+// kind 'piper': public-domain Piper voices. kind 'kokoro': Kokoro-82M (Apache-2.0), one shared model plus a small style file per voice.
+const KOKORO='https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
 const NATURAL={
-  kristin:{label:'natural · female', url:'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
-  norman:{label:'natural · male', url:'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
+  kristin:{kind:'piper', label:'natural · female', url:'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
+  norman:{kind:'piper', label:'natural · male', url:'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
+  heart:{kind:'kokoro', label:'natural+ · female', model:KOKORO+'onnx/model_quantized.onnx', style:KOKORO+'voices/af_heart.bin', pitch:205, mb:92},
+  michael:{kind:'kokoro', label:'natural+ · male', model:KOKORO+'onnx/model_quantized.onnx', style:KOKORO+'voices/am_michael.bin', pitch:115, mb:92},
 };
+const modelUrl=v=>v.kind==='kokoro' ? v.model : v.url+'.onnx';
+// Kokoro's sound set lacks three of Xenoglot's: g is written ɡ there; ɬ and the click get their nearest neighbours
+const KOKORO_SUB={g:'ɡ', 'ɬ':'ʃ', 'ǀ':'t'};
 const VOICE_CACHE='xenoglot-voices-v1';
 const inArtifact=()=>!!(window.claude && window.claude.use);
-let ortPromise=null; const piper={};
+let ortPromise=null; const piper={}, sessions={};
 function loadOrt(){ return ortPromise ??= new Promise((res,rej)=>{ if(window.ort) return res(window.ort);
   const s=document.createElement('script'); s.src='vendor/ort/ort.wasm.min.js';
-  s.onload=()=>{ ort.env.wasm.wasmPaths=new URL('vendor/ort/',location.href).href; ort.env.wasm.numThreads=1; res(ort); };
+  // proxy: inference runs in a web worker, so the page stays responsive while a voice speaks
+  s.onload=()=>{ ort.env.wasm.wasmPaths=new URL('vendor/ort/',location.href).href; ort.env.wasm.numThreads=1; ort.env.wasm.proxy=true; res(ort); };
   s.onerror=()=>{ ortPromise=null; rej(new Error('The voice engine didn’t load.')); }; document.head.appendChild(s); }); }
 async function fetchCached(url,onProgress){
   let cache=null; try{ cache=await caches.open(VOICE_CACHE); const hit=await cache.match(url); if(hit){ onProgress&&onProgress(1,1); return await hit.arrayBuffer(); } }catch(e){}
@@ -378,10 +386,17 @@ async function piperVoice(id){
   if(inArtifact()) throw new Error('The natural voice needs the hosted site (xenoglot.jas.black). Using the built-in voice here.');
   return piper[id]=(async()=>{ try{
     const v=NATURAL[id]; naturalStatus('loading the voice engine…'); const O=await loadOrt();
-    const cfg=JSON.parse(new TextDecoder().decode(await fetchCached(v.url+'.onnx.json')));
-    const model=await fetchCached(v.url+'.onnx',(g,t)=>naturalStatus(t>1?`downloading ${v.label}: ${(g/1e6).toFixed(0)} / ${(t/1e6).toFixed(0)} MB (once, then it works offline)`:'loading the voice…'));
-    naturalStatus('starting the voice…'); const sess=await O.InferenceSession.create(model,{executionProviders:['wasm']});
-    naturalStatus(`${v.label} ready`); voiceReady[id]=true; setTimeout(updateEst); return {sess,cfg,O};
+    const progress=(g,t)=>naturalStatus(t>1?`downloading ${v.label}: ${(g/1e6).toFixed(0)} / ${(t/1e6).toFixed(0)} MB (once, then it works offline)`:'loading the voice…');
+    let cfg, style=null;
+    if(v.kind==='kokoro'){
+      const tok=JSON.parse(new TextDecoder().decode(await fetchCached(KOKORO+'tokenizer.json')));
+      cfg={vocab:tok.model.vocab, audio:{sample_rate:24000}};
+      style=new Float32Array(await fetchCached(v.style));
+    } else cfg=JSON.parse(new TextDecoder().decode(await fetchCached(v.url+'.onnx.json')));
+    // both Kokoro voices share one model, so its session is shared too
+    const key=modelUrl(v); sessions[key] ??= (async()=>{ const model=await fetchCached(key,progress); naturalStatus('starting the voice…'); return O.InferenceSession.create(model,{executionProviders:['wasm']}); })();
+    let sess; try{ sess=await sessions[key]; }catch(e){ delete sessions[key]; throw e; }
+    naturalStatus(`${v.label} ready`); voiceReady[id]=true; setTimeout(updateEst); return {sess,cfg,O,style,kind:v.kind};
   }catch(e){ delete piper[id]; naturalStatus(''); throw e; } })(); }
 // phrases of IPA, stress on each word's first syllable, punctuation kept for phrasing
 function ipaPhrases(words){ const out=[]; let cur=[];
@@ -390,18 +405,29 @@ function ipaPhrases(words){ const out=[]; let cur=[];
   if(cur.length) out.push({ipa:cur.join(' ')+'.', end:'.'}); return out; }
 function phonemeIds(ipa,cfg){ const m=cfg.phoneme_id_map, pad=m['_']; const ids=[...m['^'],...pad];
   for(const ch of [...ipa]){ const id=m[ch]; if(id) ids.push(...id,...pad); } ids.push(...m['$']); return ids; }
+// Kokoro: one id per symbol, wrapped in the pad token 0; at most 510 tokens per run
+function kokoroIds(ipa,cfg){ const v=cfg.vocab, ids=[0];
+  for(const ch of [...ipa]){ const c=KOKORO_SUB[ch]||ch; if(v[c]!=null) ids.push(v[c]); } ids.push(0); return ids.slice(0,512); }
 async function speakNatural(words, voice){
-  voice={...DEFAULT.voice,...voice}; const {sess,cfg,O}=await piperVoice(L.engine); const v=NATURAL[L.engine], sr=cfg.audio.sample_rate;
+  voice={...DEFAULT.voice,...voice}; const {sess,cfg,O,style,kind}=await piperVoice(L.engine); const v=NATURAL[L.engine], sr=cfg.audio.sample_rate;
   // pitch and throat size both move the voice by resampling, so speed is compensated through length_scale
   const rate=Math.min(2,Math.max(.5, Math.pow(voice.pitch/v.pitch,.6)*Math.pow(voice.formant,.8)));
   const lengthScale=Math.min(2.5,Math.max(.4, rate/voice.speed));
   // noise_w varies the timing at random; when fitting a length it's held low so a correction pass lands
   const noise=.35+voice.jitter*.6, noiseW=voice.fitting ? .1 : .4+voice.jitter*.8;
   const chunks=[];
-  for(const ph of ipaPhrases(words)){ const ids=phonemeIds(ph.ipa,cfg); if(ids.length<4) continue;
-    const feeds={ input:new O.Tensor('int64',BigInt64Array.from(ids.map(BigInt)),[1,ids.length]),
-      input_lengths:new O.Tensor('int64',BigInt64Array.from([BigInt(ids.length)]),[1]),
-      scales:new O.Tensor('float32',Float32Array.from([noise,lengthScale,noiseW]),[3]) };
+  for(const ph of ipaPhrases(words)){
+    let feeds;
+    if(kind==='kokoro'){ const ids=kokoroIds(ph.ipa,cfg); if(ids.length<3) continue;
+      // the style vector depends on the phrase length; Kokoro is deterministic, and its speed is the inverse of length_scale
+      const at=Math.min(Math.max(ids.length-2,0),509)*256;
+      feeds={ input_ids:new O.Tensor('int64',BigInt64Array.from(ids.map(BigInt)),[1,ids.length]),
+        style:new O.Tensor('float32',style.slice(at,at+256),[1,256]),
+        speed:new O.Tensor('float32',Float32Array.from([1/lengthScale]),[1]) };
+    } else { const ids=phonemeIds(ph.ipa,cfg); if(ids.length<4) continue;
+      feeds={ input:new O.Tensor('int64',BigInt64Array.from(ids.map(BigInt)),[1,ids.length]),
+        input_lengths:new O.Tensor('int64',BigInt64Array.from([BigInt(ids.length)]),[1]),
+        scales:new O.Tensor('float32',Float32Array.from([noise,lengthScale,noiseW]),[3]) }; }
     const res=await sess.run(feeds); chunks.push(res[sess.outputNames[0]].data);
     chunks.push(new Float32Array(Math.round(sr*(ph.end===','?.12:.3)*lengthScale))); }
   if(!chunks.length) throw new Error('Nothing to say yet. Type some English first.');
@@ -741,7 +767,7 @@ let tBuf=null;
    The built-in voice's length is known exactly from wordsToSegs. The natural voice's length is that times a
    learned ratio, refined after every real result, as is the time each engine takes to make a second of audio. */
 const tailOf=v=>v.space>0 ? .2+v.space*1.6 : 0;
-const pace={len:{synth:1,kristin:.82,norman:.66}, work:{synth:.08,kristin:.45,norman:.55}, passes:1.6}; // work = seconds per pass per second of audio; passes = average natural passes when fitting
+const pace={len:{synth:1,kristin:.82,norman:.66,heart:.8,michael:.8}, work:{synth:.08,kristin:.45,norman:.55,heart:.6,michael:.6}, passes:1.6}; // work = seconds per pass per second of audio; passes = average natural passes when fitting
 try{ const s=JSON.parse(store.get('xenoglot-v1-pace')||'null'); if(s&&s.len&&s.work){ Object.assign(pace.len,s.len); Object.assign(pace.work,s.work); } }catch(e){}
 const engineNow=()=>NATURAL[L.engine] ? L.engine : 'synth';
 const fmtS=s=>s<60 ? (s<10?s.toFixed(1):Math.round(s))+' s' : Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0');
@@ -753,7 +779,7 @@ function fitSpeed(words){ // speed multiplier that lands the chosen length, kept
   if(eng==='synth') for(let i=0;i<4;i++){ const got=builtinLen(words,{...L.voice,speed:L.voice.speed*m}); m=Math.min(2,Math.max(.5, m*got/want)); } // the built-in length is exact, so converge on it
   return m; }
 let voiceReady={};
-async function checkVoiceCache(){ for(const id of Object.keys(NATURAL)){ if(voiceReady[id]) continue; try{ const c=await caches.open(VOICE_CACHE); voiceReady[id]=!!(await c.match(NATURAL[id].url+'.onnx')); }catch(e){} } updateEst(); }
+async function checkVoiceCache(){ for(const id of Object.keys(NATURAL)){ if(voiceReady[id]) continue; try{ const c=await caches.open(VOICE_CACHE); voiceReady[id]=!!(await c.match(modelUrl(NATURAL[id]))); }catch(e){} } updateEst(); }
 function updateEst(){ const el=$('#tEst'); if(!el) return; const words=tokensToWords(lastT||[]);
   if(!words.length){ el.textContent='type some english to hear it'; return; }
   const eng=engineNow(), tail=tailOf(L.voice), m=fit.on?fitSpeed(words):1;
@@ -932,7 +958,9 @@ function sideLcd(){ $('#ledMine').classList.toggle('on',Object.keys(recs).length
   el.textContent=`${(L.name||'unnamed').toLowerCase()} · ${c+v} sounds · ${v} vowels · voice ${pr?pr.toLowerCase():'custom'} · script ${(STYLES[L.style]||'').split(':')[0].toLowerCase()}`;
   $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); }
 function setStatus(msg){ $('#statusLine').textContent=msg; statusHold=Date.now()+4000; setTimeout(sideLcd,4100); }
-async function playSample(){ const words=tokensToWords(translate('Hello, traveler. We have been waiting for you. Will you speak with us?',false)); getCtx(); play(await speakWords(words)); }
+// short on purpose: a slower voice is busy while it makes this, and anything asked for meanwhile waits behind it
+async function playSample(){ if(playSample.busy) return; playSample.busy=true;
+  try{ const words=tokensToWords(translate('Hello, traveler. Will you speak with us?',false)); getCtx(); play(await speakWords(words)); } finally { playSample.busy=false; } }
 $('#vTry').addEventListener('click',playSample);
 function syncSliders(){ SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
 

@@ -43,7 +43,12 @@ npm test
 
 ## The natural voice
 
-The natural voices are [Piper](https://github.com/rhasspy/piper) neural voices (`en_US-kristin` and `en_US-norman`, trained on public-domain recordings) running in the browser with [onnxruntime-web](https://onnxruntime.ai). They read your language's sounds directly, so they pronounce invented words as written, with a light English accent. Each voice downloads once (about 63 MB) from Hugging Face when you pick it, and then works offline from the browser cache. Pitch, speed, roughness, warble, many voices, metallic and space apply to it. Growl, breathiness, your recordings and audio-track conversion use the built-in voice.
+There are two kinds of neural voice, both running in the browser with [onnxruntime-web](https://onnxruntime.ai), in a background worker so the page stays responsive:
+
+- **natural** (female, male): [Piper](https://github.com/rhasspy/piper) voices `en_US-kristin` and `en_US-norman`, trained on public-domain recordings. About 63 MB each. Fast: a few seconds of work for a paragraph.
+- **natural+** (female, male): [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0) with the `af_heart` and `am_michael` voices. More lifelike. One 92 MB model shared by both voices, and slower: roughly 1.5–2× the length of the speech to make it, depending on your computer.
+
+They read your language's sounds directly, so they pronounce invented words as written, with a light English accent. Each downloads once from Hugging Face when you pick it, and then works offline from the browser cache. Pitch, speed, roughness, warble, many voices, metallic and space apply to it. Growl, breathiness, your recordings and audio-track conversion use the built-in voice.
 
 ## Privacy
 
@@ -54,6 +59,7 @@ Everything runs in the browser: synthesis (Web Audio API and onnxruntime-web), w
 - [opentype.js](https://github.com/opentypejs/opentype.js) (MIT), vendored in `vendor/`
 - [onnxruntime-web](https://github.com/microsoft/onnxruntime) 1.20.1 (MIT), vendored in `vendor/ort/`
 - [Piper](https://github.com/rhasspy/piper) voices from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices): kristin and norman, trained on public-domain LibriVox recordings
+- [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0), via [onnx-community/Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX): voices af_heart and am_michael
 - Fonts: IBM Plex Mono, Archivo and Charis SIL (SIL Open Font License), loaded from Google Fonts
 
 ## Licence
