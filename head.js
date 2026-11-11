@@ -408,6 +408,7 @@ function create(canvas, opts) {
   const m = { jaw: 0, lip: .1, round: 0, at: .5, tight: 0 }, F = [0, 500, 1500];
   const drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, idle: 0 }, ptr = { x: 0, y: 0, t: -99 };
   const pose = { yaw: 0, pitch: 0, roll: 0, zoom: 1 }, st = { blinks: [], look: [0, 0], breath: 0, perk: 0, widen: 0, think: 0, chatter: 0 };
+  const hist = new Float32Array(200); let hi = 0, histT = 0;
   let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
 
   function setSeed(seed) { H = build(makeDNA(seed >>> 0)); st.blinks = H.eyes.map(() => 0); blinkAt = H.eyes.map(() => 1 + Math.random() * H.d.temper.blink); gest = null; nextGest = 2 + Math.random() * 3; }
@@ -446,6 +447,7 @@ function create(canvas, opts) {
     if (!speech && yawn > 0) target = { ...target, jaw: .95 * yawn, lip: .8 * yawn };
     for (const key of ['jaw', 'lip', 'round', 'at', 'tight']) m[key] += (target[key] - m[key]) * (yawn > 0 ? k * .25 : k);
     amp += (loud - amp) * (1 - Math.exp(-dt / .05));
+    histT += dt; while (histT > 1 / 60) { histT -= 1 / 60; hist[hi] = amp; hi = (hi + 1) % hist.length; }   // loudness, 60 times a second, for the spiral scope
     if (target.f) for (let i = 1; i < 3; i++) F[i] += (target.f[i - 1] - F[i]) * k;
     F[0] += ((speech && f0) - F[0]) * (1 - Math.exp(-dt / .08));
     // breathing, perking up, widening eyes, thinking
@@ -547,13 +549,11 @@ function create(canvas, opts) {
     ctx.globalCompositeOperation = 'source-over'; const mono = (px, wt = 500) => `${wt} ${px * dpr}px "IBM Plex Mono", ui-monospace, monospace`, pad = 12 * dpr;
     ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = mono(9, 600); ctx.fillStyle = 'rgba(146,147,153,1)';
     ctx.fillText((info.name || '').toUpperCase().split('').join(' '), pad, pad); ctx.font = mono(8); ctx.fillText('head ' + (d.seed >>> 0).toString(36).toUpperCase() + ' · ' + d.mood, pad, pad + 14 * dpr);
-    ctx.textAlign = 'right'; const live = speech && amp > .03;
-    [['F0', F[0]], ['F1', F[1]], ['F2', F[2]]].forEach(([lab, val], i) => { const x = W - pad - (2 - i) * 46 * dpr;
-      ctx.font = mono(7); ctx.fillStyle = `rgba(${C.tract},.9)`; ctx.fillText(lab, x, pad); ctx.font = mono(10, 600); ctx.fillStyle = live ? 'rgba(228,228,225,1)' : 'rgba(146,147,153,.6)'; ctx.fillText(live && val > 20 ? String(Math.round(val)) : '···', x, pad + 10 * dpr); });
-    { const gw = 132 * dpr, gh = 20 * dpr, gx = W - pad - gw, gy = pad + 30 * dpr; ctx.globalCompositeOperation = 'lighter'; ctx.beginPath();   // the resonance curve
-      for (let i = 0; i <= 44; i++) { const hz = 100 + i / 44 * 3400; let v = .06; for (let j = 1; j < 3; j++) { const bw = 90 + j * 60; v += (live ? 1 : .25) / (1 + Math.pow((hz - F[j]) / bw, 2)) * (j === 1 ? 1 : .7); }
-        const x = gx + i / 44 * gw, y = gy + gh - Math.min(1, v) * gh; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-      ctx.strokeStyle = `rgba(${C.feat},${live ? .85 : .3})`; ctx.lineWidth = dpr; ctx.stroke(); }
+    { const live = speech && amp > .03, R = (short ? 16 : 34) * dpr, ox = W - pad - R, oy = pad + R, N = hist.length, turns = 5.5, k = F[1] > 50 ? clamp(F[2] / F[1], 1.2, 6) : 3;   // the scope: the last few seconds of the voice wound into a spiral, newest at the rim
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.beginPath();
+      for (let i = 0; i < N; i++) { const u = i / (N - 1), h = hist[(hi + i) % N], a = u * turns * TAU - T * (live ? 2.2 : .5), r = R * (.06 + .94 * u) + R / turns * .44 * (.12 + .88 * h) * Math.sin(u * turns * TAU * k + T * 3), x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.strokeStyle = `rgba(${C.feat},${live ? .16 : .07})`; ctx.lineWidth = 4.5 * dpr; ctx.stroke(); ctx.strokeStyle = `rgba(${C.feat},${live ? .95 : .4})`; ctx.lineWidth = dpr; ctx.stroke();
+      const ae = turns * TAU - T * (live ? 2.2 : .5); ctx.fillStyle = `rgba(${C.tract},${live ? 1 : .5})`; ctx.beginPath(); ctx.arc(ox + Math.cos(ae) * R, oy + Math.sin(ae) * R, 1.6 * dpr, 0, TAU); ctx.fill(); }   // the bright point writing the trace
     const sy = Hh - 22 * dpr, sh = 16 * dpr;   // the scope: loudness of the speech, with a playhead; a breath trace at rest
     if (env && speech) { const now = speech.clock(), n = env.length; ctx.beginPath();
       for (let x = 0; x <= W - 2 * pad; x += 2 * dpr) { const i = Math.floor(x / (W - 2 * pad) * n), v = env[i] || 0; ctx.moveTo(pad + x, sy - v * sh * .5); ctx.lineTo(pad + x, sy + v * sh * .5 + dpr); }
