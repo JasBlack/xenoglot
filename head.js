@@ -111,6 +111,26 @@ function makeDNA(seed) {
 }
 
 /* ---------- geometry ---------- */
+// a body for the creature: its own silhouette, and a ribcage that follows it
+function makeBody(d, chestTop) { const r = rng((d.seed ^ 0xb0d1e5) >>> 0), R = (a, b) => a + (b - a) * r(), pick = a => a[Math.floor(r() * a.length)];
+  const b = { type: pick(['barrel', 'hourglass', 'bell', 'bulb', 'shoulders', 'segmented', 'pear']), h: Math.max(d.chestH * 1.3, R(1.05, 1.7)), w: Math.max(d.chestW * .9, R(.75, 1.35)), depth: R(.55, .9), hunch: R(-.15, .35), segN: 2 + Math.floor(r() * 4), lobe: r() < .3 ? R(.05, .14) : 0, lobeN: pick([2, 3, 4, 6]),
+    ribN: 3 + Math.floor(r() * 6), ribStyle: pick(['hoops', 'open', 'open', 'claw', 'spiral', 'fan']), ribDroop: R(0, .5), top: chestTop + .14 };
+  const prof = u => { const s = Math.sin(Math.PI * u); switch (b.type) {
+    case 'hourglass': return .45 + .55 * Math.pow(Math.abs(Math.cos(Math.PI * u)), 1.3);
+    case 'bell': return .3 + .7 * Math.pow(u, .7);
+    case 'bulb': return .28 + .72 * Math.pow(s, 1.6);
+    case 'shoulders': return 1 - .6 * u;
+    case 'pear': return .35 + .65 * Math.pow(Math.sin(Math.PI * Math.pow(u, .6) * .95), 1.2) * (.5 + .5 * u) * 1.3;
+    case 'segmented': return (.55 + .45 * Math.pow(s, .7)) * (1 + .13 * Math.sin(u * b.segN * TAU));
+    default: return .55 + .45 * Math.pow(s, .7); } };
+  b.rad = u => lerp(d.neckR * 1.15, b.w * Math.min(1.15, prof(u)), smooth(u / .16)) * (u > .93 ? Math.sqrt(Math.max(0, (1 - u) / .07)) * .6 + .4 : 1);
+  b.B = (u, th, k = 1) => { const rr = b.rad(u) * (1 + b.lobe * Math.cos(b.lobeN * th)) * k; return [rr * Math.sin(th), b.top - b.h * u, rr * b.depth * Math.cos(th) - .1 - b.hunch * u * u * .6]; };
+  // the neck joins head to body: its own thickness and shape, blending into the body's shoulders
+  const nk = { type: pick(['plain', 'thin', 'thick', 'taper', 'funnel', 'ringed', 'ringed', 'bulb', 'waist']), k: R(.8, 1.25), segN: 3 + Math.floor(r() * 4), yT: -d.jawLen * .8, yB: b.top + .01 };
+  const np = u => nk.type === 'thin' ? .62 : nk.type === 'thick' ? 1.5 : nk.type === 'taper' ? lerp(.7, 1.6, u) : nk.type === 'funnel' ? lerp(1.5, .7, u) : nk.type === 'ringed' ? 1 + .2 * Math.sin(u * nk.segN * TAU) : nk.type === 'bulb' ? 1 + .7 * Math.exp(-Math.pow((u - .5) / .2, 2)) : nk.type === 'waist' ? 1 - .4 * Math.exp(-Math.pow((u - .5) / .22, 2)) : 1;
+  b.N = (u, th, k = 1) => { const rr = lerp(d.neckR * nk.k * np(u), d.neckR * 1.15, smooth((u - .78) / .22)) * k; return [rr * Math.sin(th), lerp(nk.yT, nk.yB, u), rr * .9 * Math.cos(th) - lerp(.08, .1, u)]; };
+  b.neck = nk;
+  return b; }
 function build(d) {
   const yOf = v => v < d.vm ? -d.jawLen * (1 - v / d.vm) : d.tall * (v - d.vm) / (1 - d.vm);
   const wOf = v => {
@@ -161,6 +181,9 @@ function build(d) {
         if (er() < .5) pair(g, v0, s * .5); break; }
       default: pair(g, v0, s);
     } }
+  { const pos = e => S(e.v, e.th, 0), keep = [];   // no eye may overlap another: the smaller one shrinks to fit, or goes
+    for (const e of [...eyes].sort((a, b) => b.s - a.s)) { if (!e.stalk) for (const k of keep) { if (k.stalk) continue; const dd = Math.hypot(...sub(pos(e), pos(k))); e.s = Math.min(e.s, dd / 1.32 - k.s); } if (e.s > .03) keep.push(e); }
+    eyes.length = 0; eyes.push(...keep); }
   // where the brain sits, and how much room it has
   const vb = d.vm + .42 * (1 - d.vm), pf = S(vb, 0, 0), pb = S(vb, Math.PI, 0), ps = S(vb, Math.PI / 2, 0);
   const brainC = [0, pf[1], (pf[2] + pb[2]) / 2], brainR = Math.max(.12, Math.min((pf[2] - pb[2]) / 2, Math.abs(ps[0]), d.tall * .55) * d.brainSize);
@@ -172,7 +195,11 @@ function build(d) {
   const top = d.tall + Math.max(d.antennae ? d.antLen : 0, stalkTop, d.skin === 'filaments' ? .12 : 0) + d.crest;
   const chestTop = -d.jawLen - d.neckLen * .8, bottom = chestTop - d.chestH;
   const reach = Math.max(d.crown * (1 + d.lobeAmp + d.segAmp) * (1 + d.hammer) + (d.sweep ? d.sweep * d.tall * .35 : 0), d.chestW * .8);
-  return { d, S, frame, eyes, yOf, wOf, top, bottom, chestTop, reach, col: d.col, mouthY: yOf(d.mouthV), brainC, brainR, nodes, skin, hingeY, hingeZ };
+  const body = makeBody(d, chestTop);
+  // stars scattered over each skin: where on the surface (two fractions), how bright, how big
+  const mkStars = (n, salt) => { const r2 = rng((d.seed ^ salt) >>> 0), a = new Float32Array(n * 4); for (let i = 0; i < n; i++) { a[i * 4] = r2(); a[i * 4 + 1] = r2(); a[i * 4 + 2] = .45 + .55 * r2(); a[i * 4 + 3] = .5 + 1.3 * r2(); } return a; };
+  const stars = { head: mkStars(2600, 0x51a1), neck: mkStars(260, 0x51a2), body: mkStars(1100, 0x51a3) };
+  return { body, stars, d, S, frame, eyes, yOf, wOf, top, bottom, chestTop, reach, col: d.col, mouthY: yOf(d.mouthV), brainC, brainR, nodes, skin, hingeY, hingeZ };
 }
 
 // a wire tube along a path: rings plus long strands
@@ -253,41 +280,26 @@ function lines(H, m, t, amp, st) {
     // the brain stem runs down into the spine
     out.push({ pts: [P([0, -.8, -.1]), [0, H.yOf(d.vm) - d.jawLen * .35, H.hingeZ - .05], [0, -d.jawLen * .8, -d.neckR * .55]], color: B, alpha: .35 }); }
   /* ----- neck, spine, chest ----- */
-  for (let i = 0; i < d.neckRings + 2; i++) { const u = i / (d.neckRings + 1), y = -d.jawLen * .7 - (d.neckLen + d.jawLen * .3) * u * .8, flare = i >= d.neckRings ? 1.5 + (i - d.neckRings) * 1.2 : 1, pts = [];
-    for (let k = 0; k < 28; k++) { const a = k / 28 * TAU; pts.push([Math.sin(a) * d.neckR * flare, y, Math.cos(a) * d.neckR * .9 * (flare > 1 ? flare * .75 : 1) - .08]); }
-    out.push({ pts, closed: true, color: WIRE, alpha: .15 }); }
-  { const n = 7, y0 = -d.jawLen * .75, y1 = H.bottom + d.chestH * .2, z = -d.neckR * .62 - .08, col = [];   // vertebrae
+
+  { const n = 9, y0 = -d.jawLen * .93, y1 = H.bottom + d.chestH * .2, z = -d.neckR * .3 - .08, col = [];   // vertebrae
     for (let i = 0; i < n; i++) { const y = lerp(y0, y1, i / (n - 1)), w = .05 + .012 * i, zz = z - .04 * Math.sin(i / (n - 1) * Math.PI);
-      out.push({ pts: [[-w, y + .03, zz], [w, y + .03, zz], [w * .8, y - .03, zz], [-w * .8, y - .03, zz]], closed: true, color: C.bone, alpha: .5 });
+      out.push({ pts: [[-w * 1.2, y, zz], [w * 1.2, y, zz]], color: C.bone, alpha: .5, w: 1.8 });
       out.push({ pts: [[-w, y, zz], [-w * 2.2, y - .02, zz - .03]], color: C.bone, alpha: .35 }, { pts: [[w, y, zz], [w * 2.2, y - .02, zz - .03]], color: C.bone, alpha: .35 }); col.push([0, y, zz]); }
     out.push({ pts: col, color: C.bone, alpha: .3 }); }
   const breath = st.breath, swell = 1 + .13 * breath;
-  for (let i = 0; i < 4; i++) { const u = i / 3, y = H.chestTop - d.chestH * (.12 + .8 * u), w = d.chestW * (.62 + .38 * Math.sin(Math.PI * (.25 + .6 * u))) * (1 + .04 * breath), pts = [];   // ribs
-    for (let k = 0; k <= 22; k++) { const a = lerp(-2.5, 2.5, k / 22); pts.push([Math.sin(a) * w, y - .06 * Math.cos(a), Math.cos(a) * w * .55 - .12]); }
-    out.push({ pts, color: C.bone, alpha: .17 }); }
+  { const b = H.body, n = b.ribN, kb = .9 * (1 + .035 * breath);   // the ribcage: hoops, open ribs, drooping claws, a fan or one long spiral
+    if (b.ribStyle === 'spiral') { const pts = []; for (let k = 0; k <= 200; k++) { const u = .15 + .7 * k / 200; pts.push(b.B(u, k / 200 * n * TAU * .55, kb)); } out.push({ pts, color: C.bone, alpha: .5 }); }
+    else for (let i = 0; i < n; i++) { const u0 = .17 + .66 * (i + .5) / n, gap = b.ribStyle === 'hoops' ? 0 : b.ribStyle === 'fan' ? .95 : .4, droop = (b.ribStyle === 'claw' ? .26 : b.ribStyle === 'fan' ? .05 + .12 * (i - n / 2) / n * 2 : .1 * b.ribDroop);
+      for (const sd of [-1, 1]) { const pts = []; for (let k = 0; k <= 22; k++) { const a = lerp(Math.PI, gap, k / 22); pts.push(b.B(clamp(u0 + droop * (1 - a / Math.PI), .05, .97), sd * a, kb)); } out.push({ pts, color: C.bone, alpha: .5 }); } } }
   /* ----- eyes: ball, rings, lids, pupil, and a nerve back to the brain ----- */
   H.eyes.forEach((e, ei) => { let f, c; const blink = st.blinks[ei] || 0;
     if (e.stalk) { const base = S(e.v, e.th, 0), dir = norm([base[0] * .8, .9, base[2] * .5 + .25]), sway = Math.sin(t * 1.5 + e.ph) * .07 * (1 - .7 * st.perk), len = e.len * (1 + .2 * st.perk);
       const tip = [base[0] + dir[0] * len + sway, base[1] + dir[1] * len, base[2] + dir[2] * len + sway * .6], stalk = [base, [lerp(base[0], tip[0], .5) + sway * .3, lerp(base[1], tip[1], .55), lerp(base[2], tip[2], .4)], tip];
       tube(stalk, () => e.s * .22, 5, out, FEAT, .45, 2);
       const n = norm([dir[0] * .5, .05, 1]), tu = norm(cross([0, 1, 0], n)); f = { c: tip, n, tu, tv: cross(n, tu) }; c = tip; }
-    else { f = H.frame(e.v, e.th, 0); c = add(f.c, f.n, e.s * d.bug * .6); }
-    const tilt = d.eyeTilt * (e.side || 0), ct = Math.cos(tilt), st2 = Math.sin(tilt), wide = 1 + .14 * st.widen;
-    const ax = [f.tu[0] * ct + f.tv[0] * st2, f.tu[1] * ct + f.tv[1] * st2, f.tu[2] * ct + f.tv[2] * st2], ay = [f.tv[0] * ct - f.tu[0] * st2, f.tv[1] * ct - f.tu[1] * st2, f.tv[2] * ct - f.tu[2] * st2];
-    const shape = d.eyeShape === 'almond' ? .55 : d.eyeShape === 'slit' ? .3 : d.eyeShape === 'wide' ? .75 : 1, sy = shape * (1 - .93 * blink) * wide, sx = (d.eyeShape === 'wide' ? 1.35 : 1) * wide, es = e.s;
-    const at = (a, r, k = 0) => add(add(add(c, ax, Math.cos(a) * r * sx), ay, Math.sin(a) * r * sy), f.n, k);
-    for (let j = 1; j <= d.eyeRings; j++) { const pts = []; for (let k = 0; k < 28; k++) pts.push(at(k / 28 * TAU, es * j / d.eyeRings)); out.push({ pts, closed: true, color: FEAT, alpha: j === d.eyeRings ? .95 : .5 }); }
-    // the eyeball behind it
-    const bc = add(c, f.n, -es * .55); for (const [u, w] of [[ax, f.n], [ay, f.n]]) { const pts = []; for (let k = 0; k < 20; k++) { const a = k / 20 * TAU; pts.push(add(add(bc, u, Math.cos(a) * es * .95), w, Math.sin(a) * es * .95)); } out.push({ pts, closed: true, color: FEAT, alpha: .22 }); }
-    // lids: two arcs that meet when it blinks
-    for (const sgn of [1, -1]) { const pts = []; for (let k = 0; k <= 12; k++) { const a = lerp(Math.PI, 0, k / 12); pts.push(add(add(add(c, ax, Math.cos(a) * es * 1.12 * sx), ay, sgn * Math.sin(a) * es * shape * 1.18 * (1 - blink) * wide), f.n, .008)); } out.push({ pts, color: FEAT, alpha: .7, w: 1.3 }); }
-    if (d.bug > .25 && !e.stalk) for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + .4; out.push({ pts: [add(add(f.c, ax, Math.cos(a) * es * sx), ay, Math.sin(a) * es * sy), at(a, es)], color: FEAT, alpha: .35 }); }
-    const pc = add(add(add(c, f.n, .012), ax, st.look[0] * es * .42), ay, st.look[1] * es * .32 * sy), pr = es * .22;
-    if (d.pupil === 'slit') out.push({ pts: [add(pc, ay, -es * .7 * sy), add(pc, ay, es * .7 * sy)], color: FEAT, alpha: 1, w: 2 });
-    else if (d.pupil === 'bar') out.push({ pts: [add(pc, ax, -es * .6), add(pc, ax, es * .6)], color: FEAT, alpha: 1, w: 2 });
-    else if (d.pupil !== 'none') { const pts = []; for (let k = 0; k < 12; k++) { const a = k / 12 * TAU; pts.push(add(add(pc, ax, Math.cos(a) * pr), ay, Math.sin(a) * pr * Math.max(.2, sy))); }
-      out.push({ pts, closed: true, color: FEAT, alpha: 1, fill: d.pupil === 'dot' }); }
-    out.push({ pts: [add(pc, ax, es * .3), add(add(pc, ax, es * .38), ay, es * .1 * sy)], color: WIRE, alpha: .9, w: 1.6 });   // the glint
+    else { f = H.frame(e.v, e.th, 0); c = add(f.c, f.n, e.s * d.bug * .12); }
+    const es = e.s, bc = add(c, f.n, -es * .55);
+    out.push({ eye: e.stalk ? c : add(f.c, f.n, es * .04), n: f.n, r: es * (1 + .1 * st.widen), blink, ei });   // the eye itself is drawn by draw(), set into the skin
     if (ei < 8) out.push({ haze: c, r: es * 2.2, color: FEAT, alpha: .16 * (1 - blink) });
     if (ei < 7) { const nerve = [bc, mix(bc, H.brainC, .5), H.brainC]; nerve[1][1] += .06; out.push({ pts: nerve, color: C.brain, alpha: .28 }); if (blink > .3 || (ei + Math.floor(t * 1.3)) % 5 === 0) spark(nerve, t * 1.5 + ei * .3, out, C.brain, 2); } });
   /* ----- nose ----- */
@@ -309,16 +321,16 @@ function lines(H, m, t, amp, st) {
   out.push({ pts: up, color: FEAT, alpha: 1, w: 1.6 }, { pts: lo, color: FEAT, alpha: 1, w: 1.6 });
   if (d.teeth) { const tl = (d.teeth === 1 ? .05 : d.teeth === 2 ? .06 : .1) * d.jawLen;
     const tooth = (row, i, dir, len, taper) => { const a = row[i], b = row[i + 1], off = vert ? [dir * len, 0, -.012] : [0, -dir * len, -.012], mid = mix(a, b, .5);
-      out.push({ pts: taper ? [a, add(mid, off), b] : [a, add(mix(a, b, .12), off), add(mix(a, b, .88), off), b], color: C.bone, alpha: .8 }); };
+      out.push({ pts: taper ? [a, add(mid, off), b] : [a, add(mix(a, b, .12), off), add(mix(a, b, .88), off), b], head: 1, color: C.bone, alpha: .8 }); };
     for (let i = 2; i < 14; i++) { const fang = d.teeth === 2 && (i === 3 || i === 12);
-      if (d.teeth === 3) { for (const f of [.25, .75]) { const a = mix(up[i], up[i + 1], f), b = mix(lo[i], lo[i + 1], f); out.push({ pts: [a, add(a, vert ? [tl * .7, 0, 0] : [0, -tl, 0])], color: C.bone, alpha: .75 }, { pts: [b, add(b, vert ? [-tl * .6, 0, 0] : [0, tl * .8, 0])], color: C.bone, alpha: .6 }); } continue; }
+      if (d.teeth === 3) { for (const f of [.25, .75]) { const a = mix(up[i], up[i + 1], f), b = mix(lo[i], lo[i + 1], f); out.push({ pts: [a, add(a, vert ? [tl * .7, 0, 0] : [0, -tl, 0])], head: 1, color: C.bone, alpha: .75 }, { pts: [b, add(b, vert ? [-tl * .6, 0, 0] : [0, tl * .8, 0])], head: 1, color: C.bone, alpha: .6 }); } continue; }
       tooth(up, i, 1, tl * (fang ? 2.6 : 1), fang || d.teeth === 2); if (!fang) tooth(lo, i, -1, tl * .8, d.teeth === 2); } }
   if (d.mandibles) for (const sd of [-1, 1]) { const base = S(d.mouthV - .01, sd * d.mouthW * (vert ? .5 : 1.05), open * .3), sp = .1 + .9 * m.jaw + .5 * st.chatter, Lm = d.mandibles, path = [];
     for (let i = 0; i <= 8; i++) { const u = i / 8; path.push([base[0] + sd * Lm * (.4 * Math.sin(Math.PI * u) * (.6 + sp) - .5 * u * (1 - sp)), base[1] - Lm * .85 * u, base[2] + Lm * .45 * Math.sin(Math.PI * u * .8)]); }
     tube(path, u => Lm * .11 * (1 - .85 * u), 5, out, FEAT, .8); }
   for (const sd of [-1, 1]) { const pts = [];   // jawbone, from the hinge round to the chin
     for (let i = 0; i <= 10; i++) { const u = i / 10, p = S(lerp(d.mouthV + .1, .035, Math.pow(u, .7)), sd * lerp(1.95, .12, u), open); pts.push([p[0] * .93, p[1], p[2] * .93]); }
-    out.push({ pts, color: C.bone, alpha: .55, w: 1.3 }); }
+    out.push({ pts, color: FEAT, alpha: .95, w: 1.3 }); }
   const lipP = S(d.mouthV - .002, 0, open * .5), L0 = [0, lipP[1], lipP[2] * .96], corner = [0, H.mouthY + .05, -.18 * d.crown * d.depth], G = [0, -d.jawLen - d.neckLen * .42, -.1];
   const r0 = Math.min(.11 * d.crown, d.neckR * .5), hot = .22 + .78 * amp;
   { const drop = open * d.jawSwing * .16, front = m.at < .3 ? m.tight : 0, back = m.at >= .3 && m.at < .75 ? m.tight : 0, path = [];   // the tongue reaches for where the sound is made
@@ -357,7 +369,7 @@ function lines(H, m, t, amp, st) {
     out.push({ pts: path, color: FEAT, alpha: .8 }); const tip = path[8], r = .035 + .02 * amp + .015 * st.perk; ball(tip, r, r, r, out, FEAT, .9, 1, 10); }
   if (d.horns) for (const side of [-1, 1]) { const base = S(d.vm + .35 * (1 - d.vm), side * 1.9, 0), path = [], R0 = d.horns * .9, Cn = [base[0], base[1] + R0 * .2, base[2] - R0], ph0 = Math.atan2(-.2, 1);
     for (let i = 0; i <= 18; i++) { const u = i / 18, R = R0 * (1 - .5 * u), ph = ph0 + u * d.hornTurns * TAU; path.push([Cn[0] + side * d.horns * 1.1 * u, Cn[1] + R * Math.sin(ph), Cn[2] + R * Math.cos(ph)]); }
-    tube(path, u => d.horns * .24 * (1 - .82 * u), 7, out, C.bone, .6); }
+    tube(path, u => d.horns * .24 * (1 - .82 * u), 7, out, FEAT, .7); }
   if (d.fins) for (const side of [-1, 1]) { const tips = [], flap = 1 + .25 * Math.sin(t * 2.3 + d.phase) * (.3 + amp) + .3 * st.perk;
     for (let i = 0; i < d.finRays; i++) { const u = i / (d.finRays - 1), base = S(lerp(d.eyeV - .12, d.eyeV + .14, u), side * 1.57, 0), tip = [base[0] + side * d.fins * (.6 + .4 * Math.sin(Math.PI * u)) * flap, base[1] + d.fins * (u - .3) * .8, base[2] - d.fins * .5 / flap];
       out.push({ pts: [base, tip], color: FEAT, alpha: .55 }); tips.push(tip); }
@@ -457,11 +469,11 @@ function create(canvas, opts) {
 
   function draw() {
     const W = canvas.width, Hh = canvas.height, dpr = W / Math.max(1, canvas.clientWidth || W), C = H.col, WIREc = C.wire, d = H.d;
-    ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(11,11,12,.5)'; ctx.fillRect(0, 0, W, Hh);   // phosphor: the last frames linger
-    const short = Hh < 230 * dpr, hud = (short ? 30 : 70) * dpr, topPad = (short ? 10 : 30) * dpr, narrow = matchMedia("(max-width:850px)").matches && !short, low = H.chestTop - d.chestH * (narrow ? .22 : .45), span = H.top - low, wide = (2 * H.reach + .3 + (d.fins || d.horns ? .5 : 0)) * (narrow ? .86 : 1);   // the chest runs off the bottom
+    ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0; ctx.fillStyle = '#060607'; ctx.fillRect(0, 0, W, Hh);
+    const short = Hh < 230 * dpr, hud = (short ? 30 : 70) * dpr, topPad = (short ? 10 : 30) * dpr, narrow = matchMedia("(max-width:850px)").matches && !short, low = H.body.top - H.body.h * (narrow ? .4 : .55), span = H.top - low, wide = Math.max(2 * H.reach + .3 + (d.fins || d.horns ? .5 : 0), H.body.w * 2.1) * (narrow ? .86 : 1);   // the body runs off the bottom
     const scale = Math.min(W / wide, (Hh - hud - topPad) / (span * 1.02)) * pose.zoom, cx = W / 2, cy = topPad + (Hh - hud - topPad) * .5 + (H.top + low) / 2 * scale;
     const cyaw = Math.cos(pose.yaw), syaw = Math.sin(pose.yaw), cp = Math.cos(pose.pitch), sp = Math.sin(pose.pitch), cr = Math.cos(pose.roll), sr = Math.sin(pose.roll), cam = 4.6, pivot = -d.jawLen * .6;
-    const buckets = {}, sketch = d.ink === 'sketch', boil = Math.floor(T * 7), rough = d.rough * dpr, hz = [];
+    const buckets = {}, sketch = d.ink === 'sketch', boil = Math.floor(T * 7), rough = d.rough * dpr, hz = [], eyes = [], bones = { head: {}, back: {}, front: {} };
     const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
     const proj = p => { const wob = amp * .006 * Math.sin(p[1] * 37 + T * 31), neck = smooth((p[1] - H.chestTop) / (d.neckLen * .8 + .01));   // the chest stays put; the head turns on the neck
         const px = p[0] + wob, py = p[1] - pivot, x0 = lerp(px, px * cr - py * sr, neck), y0 = lerp(py, px * sr + py * cr, neck), ya = lerp(1, cyaw, neck), sa = syaw * neck;
@@ -469,10 +481,12 @@ function create(canvas, opts) {
         const f = cam / (cam - z); return [cx + x * scale * f, cy - y * scale * f, z]; };
     let si = 0;
     for (const ln of lines(H, m, T, amp, st)) {
-      if (ln.haze) { const q = proj(ln.haze); hz.push([q[0], q[1], ln.r * scale, ln.color, ln.alpha]); continue; }
-      const P = ln.pts.map(proj);
-      if (ln.fill) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${ln.color},${.9 * (.45 + .55 * smooth((P[0][2] + 1) / 2))})`; ctx.beginPath(); P.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.fill(); continue; }
-      const n = P.length, end = ln.closed ? n : n - 1;
+      if (ln.haze) { const q = proj(ln.haze); hz.push([q[0], q[1], ln.r * scale * 2, ln.color, Math.min(.6, ln.alpha * 2.2)]); continue; }
+      if (ln.eye) { const q = proj(ln.eye), q2 = proj(add(ln.eye, ln.n, .05)); let nx = q2[0] - q[0], ny = q[1] - q2[1], nz = (q2[2] - q[2]) * scale; const l = Math.hypot(nx, ny, nz) || 1;   // which way the eye faces, as seen
+        eyes.push({ x: q[0], y: q[1], r: ln.r * scale * .97 * cam / (cam - q[2]), nx: nx / l, ny: ny / l, nz: nz / l, blink: ln.blink, ei: ln.ei }); continue; }
+      const P = ln.pts.map(proj), n = P.length, end = ln.closed ? n : n - 1;
+      if (ln.color === C.bone) {   // bones are clay rolls under the skin: the head's (teeth), and the body's far and near sides
+        for (let i = 0; i < end; i++) { const a = P[i], b = P[(i + 1) % n], g = ln.head ? bones.head : (a[2] + b[2]) / 2 < -.24 ? bones.back : bones.front; (g[ln.w || 1] ||= []).push(a[0], a[1], b[0], b[1]); } continue; }
       const plainLn = ln.color === WIREc;
       for (let i = 0; i < end; i++) { let a = P[i], b = P[(i + 1) % n]; si++;
         if (sketch) { if (rnd(si) < (plainLn ? .3 : .1)) continue;   /* a hand-drawn line: gaps, and ends that never quite meet, redrawn a few times a second */
@@ -480,13 +494,55 @@ function create(canvas, opts) {
         const depth = smooth(((a[2] + b[2]) / 2 + 1.1) / 2.2), lvl = Math.max(1, Math.round(ln.alpha * (.22 + .78 * depth) * 6)), key = ln.color + '|' + lvl + '|' + (ln.w || 1);
         (buckets[key] ||= []).push(a[0], a[1], b[0], b[1]); }
     }
-    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-    for (const [x, y, r, color, al] of hz) { if (r < 2 || al < .01) continue; const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${color},${al})`); g.addColorStop(1, `rgba(${color},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }   // soft light around the organs
+    /* ----- the skins: a dark starfield, lit from the upper left, with the creature's colour glowing at the edges ----- */
+    const fa = C.feat.split(',').map(Number); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const skin = (pt, NV, NT, flip, uo, us, ut, dim, dark, stars) => { const M = NT + 1, Q = new Array((NV + 1) * M), front = new Uint8Array(NV * NT), fills = {};
+      for (let i = 0; i <= NV; i++) for (let j = 0; j <= NT; j++) Q[i * M + j] = proj(pt(i / NV, j / NT * TAU - Math.PI));
+      for (let i = 0; i < NV; i++) for (let j = 0; j < NT; j++) { const a = Q[i * M + j], b = Q[i * M + j + 1], c = Q[(i + 1) * M + j + 1], e = Q[(i + 1) * M + j];
+        const bx = b[0] - a[0], by = a[1] - b[1], bz = (b[2] - a[2]) * scale, ex = e[0] - a[0], ey = a[1] - e[1], ez = (e[2] - a[2]) * scale;
+        let nx = by * ez - bz * ey, ny = bz * ex - bx * ez, nz = bx * ey - by * ex; if (flip) { nx = -nx; ny = -ny; nz = -nz; } const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+        if (nz < .02) continue; front[i * NT + j] = 1;   // only the side facing us is drawn
+        const nl = Math.max(0, -.453 * nx + .605 * ny + .655 * nz), fr = 1 - nz, ui = uo + i / NV * us, uj = j / NT * ut, aa = .5 + .5 * Math.sin(ui * .11 + uj * .07), bb = .5 + .5 * Math.sin(ui * .05 - uj * .13 + 2);
+        const k = (.55 + .6 * nl) * dim * (dark ? 1 - .6 * fr * fr : 1), rim = .03 + .34 * fr * fr;
+        const r = Math.min(255, (14 + 26 * aa * bb) * k + fa[0] * rim), g = Math.min(255, (16 + 46 * bb) * k + fa[1] * rim), bl = Math.min(255, (34 + 50 * aa) * k + fa[2] * rim), key = (r >> 3) << 10 | (g >> 3) << 5 | (bl >> 3);
+        (fills[key] ||= []).push(a[0], a[1], b[0], b[1], c[0], c[1], e[0], e[1]); }
+      for (const key in fills) { const f = fills[key], col = `rgb(${(key >> 10) * 8 + 4},${(key >> 5 & 31) * 8 + 4},${(key & 31) * 8 + 4})`; ctx.beginPath();   // one fill per shade
+        for (let i = 0; i < f.length; i += 8) { ctx.moveTo(f[i], f[i + 1]); ctx.lineTo(f[i + 2], f[i + 3]); ctx.lineTo(f[i + 4], f[i + 5]); ctx.lineTo(f[i + 6], f[i + 7]); ctx.closePath(); }
+        ctx.fillStyle = ctx.strokeStyle = col; ctx.fill(); ctx.lineWidth = dpr; ctx.stroke(); }
+      return () => { const lv = [[], [], []];   // the stars go on last, over whatever lies under the skin
+        for (let s = 0; s < stars.length; s += 4) { const fi = stars[s] * NV, fj = stars[s + 1] * NT, i = Math.min(NV - 1, fi | 0), j = Math.min(NT - 1, fj | 0); if (!front[i * NT + j]) continue;
+          const u = fj - j, v = fi - i, a = Q[i * M + j], b = Q[i * M + j + 1], c = Q[(i + 1) * M + j + 1], e = Q[(i + 1) * M + j], x0 = a[0] + (b[0] - a[0]) * u, y0 = a[1] + (b[1] - a[1]) * u, x1 = e[0] + (c[0] - e[0]) * u, y1 = e[1] + (c[1] - e[1]) * u;
+          lv[Math.min(2, (stars[s + 2] - .45) / .55 * 3 | 0)].push(x0 + (x1 - x0) * v, y0 + (y1 - y0) * v, stars[s + 3] * dpr); }
+        lv.forEach((L, k) => { ctx.fillStyle = `rgba(255,255,255,${.5 + .22 * k})`; ctx.beginPath(); for (let i = 0; i < L.length; i += 3) ctx.rect(L[i], L[i + 1], L[i + 2], L[i + 2]); ctx.fill(); }); }; };
+    // a clay roll: shadow, body, lit side. Dimmer the deeper it lies
+    const clay = (groups, wd, tone) => { const pass = (style, w, dx, dy) => { for (const g of Object.keys(groups).sort((a, b) => b - a)) { const sg = groups[g], k = +g; ctx.beginPath(); for (let i = 0; i < sg.length; i += 4) { ctx.moveTo(sg[i] + dx * k, sg[i + 1] + dy * k); ctx.lineTo(sg[i + 2] + dx * k, sg[i + 3] + dy * k); } ctx.strokeStyle = style; ctx.lineWidth = w * k; ctx.stroke(); } };
+      if (tone) { pass('rgba(0,0,0,.3)', wd + 3 * dpr, 1.5 * dpr, 2 * dpr); pass('rgb(84,84,98)', wd, 0, 0); pass('rgb(150,150,152)', wd * .82, -wd * .07, -wd * .09); pass('rgba(255,255,255,.3)', wd * .3, -wd * .2, -wd * .24); }
+      else { pass('rgb(46,46,56)', wd, 0, 0); pass('rgb(92,92,98)', wd * .8, 0, 0); } };
+    ctx.globalCompositeOperation = 'source-over';
+    const B = H.body, sb = skin((u, th) => B.B(u, th, 1 + .02 * st.breath), 18, 40, true, 80, 40, 84, .71, true, H.stars.body), sn = skin((u, th) => B.N(u, th), 8, 28, true, 130, 18, 60, .71, true, H.stars.neck);
+    clay(bones.back, 3 * dpr, 0); clay(bones.front, 4 * dpr, 1); sb(); sn();
+    const skH = skin((u, th) => H.S(.012 + .98 * u, th, m.jaw), 34, 52, false, 0, 80, 120, 1, false, H.stars.head);
+    clay(bones.head, 4 * dpr, 1); skH();
+    /* ----- light: the glow round the organs, the fine cream mesh, the glowing features and insides ----- */
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, r, color, al] of hz) { if (r < 2 || al < .01) continue; const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${color},${al})`); g.addColorStop(1, `rgba(${color},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }
     for (const key in buckets) { const [color, lvl, w] = key.split('|'), al = lvl / 6, seg = buckets[key], plain = color === WIREc;
       ctx.beginPath(); for (let i = 0; i < seg.length; i += 4) { ctx.moveTo(seg[i], seg[i + 1]); ctx.lineTo(seg[i + 2], seg[i + 3]); }
-      if (!plain && lvl >= 4) { ctx.strokeStyle = `rgba(${color},${al * .055})`; ctx.lineWidth = (11 + 3 * w) * dpr; ctx.stroke(); }   // bloom
-      if (!plain || lvl > 1) { ctx.strokeStyle = `rgba(${color},${al * (plain ? .09 : .22)})`; ctx.lineWidth = (3.2 + 2 * w) * dpr; ctx.stroke(); }   // the glow
-      ctx.strokeStyle = `rgba(${color},${al * (plain ? .6 : .9)})`; ctx.lineWidth = w * dpr * (plain ? .8 : 1); ctx.stroke(); }   // the trace
+      if (plain) { ctx.strokeStyle = `rgba(239,232,216,${.1 + .5 * al})`; ctx.lineWidth = .7 * dpr; ctx.stroke(); continue; }   // the mesh, in cream ink
+      if (lvl >= 4) { ctx.strokeStyle = `rgba(${color},${al * .055})`; ctx.lineWidth = (11 + 3 * w) * dpr; ctx.stroke(); }   // bloom
+      ctx.strokeStyle = `rgba(${color},${al * .22})`; ctx.lineWidth = (3.2 + 2 * w) * dpr; ctx.stroke();   // the glow
+      ctx.strokeStyle = `rgba(${color},${al * .9})`; ctx.lineWidth = w * dpr; ctx.stroke(); }   // the trace
+    /* ----- eyes: a black void set into the skin, faint stars round its edge, one bright star that looks where the creature looks ----- */
+    const rgbaF = (a, k = 1) => `rgba(${fa.map(v => Math.round(Math.min(255, v * k))).join(',')},${a})`;
+    for (const e of eyes) { if (e.nz < .12 || e.r < 1.5 * dpr) continue; const r = e.r, open = 1 - .92 * e.blink;
+      ctx.save(); ctx.translate(e.x, e.y); const an = Math.atan2(-e.ny, e.nx); ctx.rotate(an); ctx.scale(Math.max(.3, e.nz), 1); ctx.rotate(-an); ctx.scale(1, open);   // it turns with the surface, flattens as it turns away, and shuts to blink
+      ctx.globalCompositeOperation = 'lighter'; let g = ctx.createRadialGradient(0, 0, r * .8, 0, 0, r * 1.7); g.addColorStop(0, rgbaF(.5)); g.addColorStop(1, rgbaF(0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = r * .28; ctx.beginPath(); ctx.arc(0, 0, r * 1.1, 0, TAU); ctx.stroke(); ctx.strokeStyle = rgbaF(.5); ctx.lineWidth = dpr; ctx.beginPath(); ctx.arc(0, 0, r * 1.24, 0, TAU); ctx.stroke();   // the socket
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); g = ctx.createRadialGradient(0, 0, r * .5, 0, 0, r); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, rgbaF(.4)); ctx.fillStyle = g; ctx.fill();
+      for (let k = 0; k < 14; k++) { const a = rnd(k + e.ei * 31) * TAU, rr = (.35 + .55 * Math.sqrt(rnd(k * 3 + e.ei * 17))) * r, sz = (.5 + .7 * rnd(k * 9 + e.ei)) * dpr; ctx.fillStyle = `rgba(255,255,255,${.3 + .5 * rnd(k * 5 + e.ei)})`; ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, sz, sz); }
+      ctx.strokeStyle = rgbaF(1, 1.25); ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+      if (r > 3 * dpr) { const sx = (st.look[0] * .34 - .12) * r, sy = (-st.look[1] * .3 - .14) * r, L = r * .3; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = dpr * .8; ctx.beginPath(); ctx.moveTo(sx - L, sy); ctx.lineTo(sx + L, sy); ctx.moveTo(sx, sy - L); ctx.lineTo(sx, sy + L); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(sx, sy, dpr * 1.1, 0, TAU); ctx.fill(); }
+      ctx.restore(); }
     // read-outs, drawn on the screen itself so a recording carries them
     ctx.globalCompositeOperation = 'source-over'; const mono = (px, wt = 500) => `${wt} ${px * dpr}px "IBM Plex Mono", ui-monospace, monospace`, pad = 12 * dpr;
     ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = mono(9, 600); ctx.fillStyle = 'rgba(146,147,153,1)';
