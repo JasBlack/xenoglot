@@ -28,13 +28,15 @@ try {
   const p = await page({ viewport: { width: 1280, height: 900 } });
   await p.goto(URL0); await p.waitForTimeout(800);
   check((await p.title()) === 'Xenoglot - JAS.BLACK', 'tab title');
-  check(await p.isVisible('#v-translate') && await p.isVisible('#intro'), 'a first visit opens on translate with the welcome');
+  check(await p.isVisible('#v-translate') && await p.isVisible('#intro'), 'a first visit opens on the speak section with the welcome');
+  const stop = () => p.evaluate(() => { const k = document.querySelector('#tSpeak'); if (k.classList.contains('playing')) k.click(); });
+  const open = id => p.evaluate(i => { document.querySelector(i).open = true; }, id);
   await p.click('#introClose'); await p.reload(); await p.waitForTimeout(600);
   check(!(await p.isVisible('#intro')), 'the welcome stays closed once dismissed');
   for (const v of ['sounds', 'words', 'translate', 'audio', 'script']) {
     await p.goto(URL0 + '#' + v); await p.waitForTimeout(300);
     const shown = await p.evaluate(() => ['sounds','words','translate','audio','script'].filter(x => document.getElementById('v-' + x).getBoundingClientRect().height > 0));
-    check(shown.length === 1 && shown[0] === v, `only the ${v} step is shown`);
+    check(shown.length === 1 && shown[0] === v, `only the ${v} section is shown`);
   }
   await p.goto(URL0 + '#translate'); await p.waitForTimeout(500);
   check((await p.textContent('#outRoman')).trim().length > 10, 'translation produces words');
@@ -45,18 +47,19 @@ try {
   await p.click('#tSpeak');
   await p.waitForFunction(() => /s of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
   check(true, 'speech renders');
-  await p.click('#tStop');
+  await stop();
   const est = await p.textContent('#tEst');
   const made = await p.textContent('#tStatus');
   check(/≈ .+ of speech · ready in about/.test(est) && est.match(/≈ ([\d.]+) s/)?.[1] === made.match(/^([\d.]+) s/)?.[1], 'length estimate matches the built-in voice');
-  await p.click('label:has(#fitOn)');
+  await open('#tOpts'); await p.click('label:has(#fitOn)');
   await p.fill('#fitSecs', '8'); await p.dispatchEvent('#fitSecs', 'input');
   await p.evaluate(() => { document.querySelector('#tStatus').textContent = ''; });
   await p.click('#tSpeak');
   await p.waitForFunction(() => /of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
-  await p.click('#tStop');
+  await stop();
   check(/^8\.0 s of speech \(asked for 8\.0 s\)/.test(await p.textContent('#tStatus')), 'fit to a length lands 8 s exactly');
   await p.click('label:has(#fitOn)');
+  await open('#tMore');
   const [audio] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveAudio')]);
   const wav = await readFile(await audio.path());
   check(audio.suggestedFilename().endsWith('.wav') && wav.subarray(0, 4).toString('latin1') === 'RIFF' && wav.length > 44100, 'speech saves as a .wav file');
@@ -64,7 +67,8 @@ try {
   const mp3 = await readFile(await share.path());
   const mp3ok = mp3.subarray(0, 3).toString('latin1') === 'ID3' || (mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0);
   check(share.suggestedFilename().endsWith('.mp3') && mp3ok && mp3.length > 10000 && mp3.length < wav.length / 3, 'speech saves as a small .mp3 for sharing');
-  check((await p.$$('#exList .chip')).length >= 1, 'examples listed');
+  await p.click('#langToggle');
+  check((await p.$$('#exList .chip')).length >= 1, 'examples listed in the library');
   await p.click('#exList .chip:nth-child(2)'); await p.waitForTimeout(600);
   const name = await p.inputValue('#langName');
   await p.click('#btnShare'); await p.waitForTimeout(300);
@@ -86,7 +90,11 @@ try {
   const lit = () => p.evaluate(() => { const c = document.querySelector('#headCanvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 16) if (d[i] + d[i + 1] + d[i + 2] > 120) n++; return n; });
   check((await lit()) > 300, 'the head is drawn on the monitor');
   const seedA = await p.getAttribute('#headCanvas', 'data-seed'); await p.click('#headNew'); await p.waitForTimeout(200);
-  check(seedA && (await p.getAttribute('#headCanvas', 'data-seed')) !== seedA, 'new head grows a different head');
+  const seedB = await p.getAttribute('#headCanvas', 'data-seed');
+  check(seedA && seedB !== seedA, 'new creature grows a different head');
+  await p.waitForTimeout(1500); await stop();
+  const before = await p.textContent('#outRoman'); await p.click('#btnRandom'); await p.waitForTimeout(700);
+  check((await p.getAttribute('#headCanvas', 'data-seed')) === seedB && (await p.textContent('#outRoman')) !== before, 'new language changes the words and keeps the head');
   await p.fill('#enText', 'Hello traveler.'); await p.dispatchEvent('#enText', 'input');
   const [video] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.click('#headVideo')]);
   const vid = await readFile(await video.path()), webm = vid.readUInt32BE(0) === 0x1a45dfa3, mp4 = vid.subarray(4, 8).toString('latin1') === 'ftyp';

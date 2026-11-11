@@ -453,7 +453,7 @@ function create(canvas, opts) {
   function draw() {
     const W = canvas.width, Hh = canvas.height, dpr = W / Math.max(1, canvas.clientWidth || W), C = H.col, WIREc = C.wire, d = H.d;
     ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(11,11,12,.5)'; ctx.fillRect(0, 0, W, Hh);   // phosphor: the last frames linger
-    const hud = 70 * dpr, topPad = 30 * dpr, low = H.chestTop - d.chestH * .45, span = H.top - low, wide = 2 * H.reach + .3 + (d.fins || d.horns ? .5 : 0);   // the chest runs off the bottom
+    const short = Hh < 230 * dpr, hud = (short ? 30 : 70) * dpr, topPad = (short ? 10 : 30) * dpr, narrow = matchMedia("(max-width:850px)").matches && !short, low = H.chestTop - d.chestH * (narrow ? .22 : .45), span = H.top - low, wide = (2 * H.reach + .3 + (d.fins || d.horns ? .5 : 0)) * (narrow ? .86 : 1);   // the chest runs off the bottom
     const scale = Math.min(W / wide, (Hh - hud - topPad) / (span * 1.02)) * pose.zoom, cx = W / 2, cy = topPad + (Hh - hud - topPad) * .5 + (H.top + low) / 2 * scale;
     const cyaw = Math.cos(pose.yaw), syaw = Math.sin(pose.yaw), cp = Math.cos(pose.pitch), sp = Math.sin(pose.pitch), cr = Math.cos(pose.roll), sr = Math.sin(pose.roll), cam = 4.6, pivot = -d.jawLen * .6;
     const buckets = {}, sketch = d.ink === 'sketch', boil = Math.floor(T * 7), rough = d.rough * dpr, hz = [];

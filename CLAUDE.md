@@ -1,6 +1,6 @@
 # Xenoglot (xenoglot.jas.black)
 
-A JAS.BLACK console tool for inventing a spoken language on English grammar: sounds → words → translate → audio → script/font.
+A JAS.BLACK console tool for inventing spoken alien languages on English grammar. The mission: every language should sound unique and real. A creature (head + voice) speaks a language (sounds + words + accent + script).
 
 ## Stack
 - Static site, no build step: `index.html`, `style.css`, `app.js` (one IIFE, plain JS).
@@ -11,7 +11,7 @@ A JAS.BLACK console tool for inventing a spoken language on English grammar: sou
 - Google Fonts: IBM Plex Mono, Archivo (family title) and Charis SIL (only for the language's own text, because it carries the IPA letters). Not essential; fallbacks are set.
 
 ## Folder map
-- `index.html`: head (title/OG per the family's head.html), markup for the top bar, left column (language + steps), the five step views, and the monitor column (`.headcol`).
+- `index.html`: head (title/OG per the family's head.html), the top bar (title, five section tabs `nav.steps`, library key), the speaker column (`.headcol`: head, name, speak, new language, new creature, video), the library panel (`.langpanel`, shown with `.open`) and the five section views.
 - `head.js`: the speaking head (`window.XenoHead`). Self-contained: DNA from a seed, geometry, line work, mouth shapes, canvas drawing. Knows nothing about languages except the sound table it's given.
 - `asr-worker.js`: speech-to-text worker (Whisper tiny.en on onnxruntime-web). Self-contained.
 - `style.css`: family tokens (dark + light) and components from `family.css` (Nov 2026), plus Xenoglot's own components built only from those tokens.
@@ -24,7 +24,7 @@ A JAS.BLACK console tool for inventing a spoken language on English grammar: sou
 ## Commands
 - Run: `python3 -m http.server 8000` → http://localhost:8000
 - Debug hooks: add `?debug` to the URL to get `window.__xg` (`getLang`, `setTrim`, `run`) for measuring levels.
-- Test: `npm install && npx playwright install chromium && npm test` (27 checks, including the downloads (.wav, .mp3, .otf, video), the length estimate and fit, the welcome, spoken numbers, the phone layout and the head). `npm run test:models` adds 7 checks with real models.
+- Test: `npm install && npx playwright install chromium && npm test` (28 checks, including the downloads (.wav, .mp3, .otf, video), the length estimate and fit, the welcome, spoken numbers, the phone layout and the head). `npm run test:models` adds 13 checks with real models (every natural voice).
 - On localhost only, `?hf=http://…/` makes the app fetch models from that address instead of huggingface.co (tests use it).
 
 ## Deployment
@@ -43,6 +43,20 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Known issues: the natural voice is an English-trained model, so non-English sounds (y, ø, ɯ, clicks, ɬ) come out approximated. Audio-track conversion and recorded sounds stay on the built-in synth. Long tracks near the 10-minute cap may be heavy for older phones.
 - Unverified: the .otf installing on macOS/Windows (it passes OTS, but no OS install was tried); mic recording on iOS Safari; the share sheet (`navigator.share` with files) on a real phone; video recording as H.264 .mp4 (headless Chromium has no H.264 encoder, so tests got .webm); how the head and the voices look and sound to a person.
 
+## Layout and simplification (2.2.0)
+- One of everything: one speak key (`#tSpeak`, under the head; it toggles to stop and jumps to the speak section), one new-language key, save/open/share only in the library. The top-bar transport, the status LEDs (kept hidden: the code still lights them), the numbered steps, the panel numbers, the next-step keys and the 1–5 shortcuts are gone. Space and N remain.
+- Sections (tabs): speak (`#translate`, home), voice (`#sounds`), words, audio, script. The hashes and `#v-*` ids are unchanged.
+- **new language** keeps the creature: `L.head`, `L.engine` and `L.voice` carry over; sounds, word shapes, accent and script are new. **new creature** (`#headNew`) gives a new head and a new voice character (`randomVoice`) and keeps the language.
+- Less-used parts fold: `details.more` (options, more ways to save, fine-tune, the words for audio) start closed; `details.panel.fold` wraps record-your-own-voice, how-many-sounds and draw-a-letter (picking a letter opens it).
+- Phones (under 850 px): top bar, then the head (34vh), name, a 52 px speak key, the three keys, then the section; tabs are a fixed bottom bar. In the other sections the speaker column shrinks to a 170 px head strip (`body[data-view]`), and head.js uses a compact read-out when the canvas is under 230 px tall.
+
+## Accent (2.2.0)
+- `L.accent` = `{stress, stressLen, vLen, cLen, longV, melody, range, gap, tempo, final, qRise}` from `makeAccent(rng)`. `ACCENT0` is how everything was spoken before; Velnari keeps it. Languages saved without one get `makeAccent` from `hash(seed + '|accent')`, the same every time. Carried in files and share links.
+- `sylInfo(keys, A, word)` gives vowel positions, the stressed vowel (`first last penult even`), which vowels are long (hash of the word) and each syllable's tone.
+- Built-in voice: `wordsToSegs` uses it for durations, the phrase tune (`fall rise step`, or level for the per-syllable tunes `wave tone`, or `flat`), word gaps, pace, final lengthening and whether questions rise.
+- Natural voices: `wordIpa` puts `ˈ` where the accent stresses and `ː` after long vowels; `tempo` goes into `length_scale`; `melodyCurve` bends each phrase's pitch with a detune curve on the clip (skipped while fitting a length). The voice's own intonation is still underneath.
+- The voice section shows it in words (`renderAccent`) with a **new accent** key.
+
 ## Word shapes (1.2.0)
 - `FREQ` weights every sound by how common it is across languages, times a per-language factor from the seed (`langWeights`), so each language has favourite sounds.
 - `CODA` lists the sounds allowed to end a syllable, weighted. Clicks never end one.
@@ -54,7 +68,9 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Hints (`recHint`) appear on the rec buttons, in the take order (bar = hold, dot = short) and as a toast when recording.
 
 ## Natural voice (1.3.0)
-- `NATURAL` lists the voices (id → label, Hugging Face URL stem, natural pitch). `L.engine` = `synth` | `kristin` | `norman`, stored per language and carried in share links.
+- `NATURAL` lists the voices (id → label, Hugging Face URL stem, natural pitch). `L.engine` = `synth` or a voice id, stored per language and carried in share links.
+- 2.2.0 voices. Piper (63 MB each): kristin, norman (English, public domain), harri (Finnish, CC0), anna (Hungarian, CC0), vais (Vietnamese vais1000, CC BY 4.0: credit it). Kokoro (one shared 92 MB model, labels end in +): heart, michael, alpha (`jf_alpha`), yunjian (`zm_yunjian`), hindi (`hf_alpha`), nicola (`im_nicola`). Voices trained on other languages say the same IPA with a different accent, which is the point. All Piper voices share one phoneme table; the Vietnamese one lacks ASCII `g`, so `phonemeIds` falls back to `ɡ`. The `pitch` of the new voices is an estimate, not measured.
+- Checked licences, not usable: tr_TR-dfki (CC BY-NC-SA), zh_CN-huayan (unknown). kk_KZ-issai (CC BY 4.0) is fine but only comes in the large size.
 - Voices: only public-domain or CC0 Piper voices. kristin and norman (LibriVox, public domain) are used. Also clean: ljspeech, cori, john, bryce, joe (CC0). Avoid ryan and hfc_* (CC BY-NC-SA) and lessac (Blizzard licence).
 - Input: the language's IPA from `PM[k].ipa`, `ˈ` before each word, phrases ended with `, . ?`. IDs = `^ _ p1 _ p2 _ … $` from the voice's `phoneme_id_map`. Every IPA symbol Xenoglot uses (including ǀ) is in the map.
 - Effects: pitch and throat size become one resample rate (`(pitch/voicePitch)^0.6 × formant^0.8`, clamped 0.5–2). `length_scale = rate / speed` keeps the speed right. Roughness feeds `noise_scale`/`noise_w`. Warble = LFO on detune. Many voices = two detuned, delayed copies. Metallic and space reuse the synth's ring mod and reverb.

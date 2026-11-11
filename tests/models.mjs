@@ -39,6 +39,7 @@ try {
   await p.goto(URL0 + '#audio'); await p.waitForTimeout(800);
   await p.setInputFiles('#fileTrack', sample);
   await status('#dInfo', 'phrases');
+  await p.evaluate(() => document.querySelectorAll('#v-audio details').forEach(d => { d.open = true; }));
   await p.click('#dTranscribe');
   await status('#dAsr', 'written down|no speech');
   const heard = (await p.inputValue('#dTranscript')).toLowerCase();
@@ -48,20 +49,24 @@ try {
   await p.click('#dGo'); await status('#dStatus', 'made in');
   check(/placed on the original’s timing · built-in voice/.test(await p.textContent('#dStatus')), 'converts with the built-in voice on the original timing');
 
-  for (const [id, label] of [['kristin', 'natural · female'], ['heart', 'natural+ · female']]) {
+  // every natural voice: the two English ones, the ones trained on other languages, and the lifelike set last (heart stays selected)
+  for (const [id, label] of [['kristin', 'american woman'], ['harri', 'finnish man'], ['anna', 'hungarian woman'], ['vais', 'vietnamese woman'], ['alpha', 'japanese woman +'], ['yunjian', 'mandarin man +'], ['hindi', 'hindi woman +'], ['nicola', 'italian man +'], ['heart', 'american woman +']]) {
     await p.goto(URL0 + '#sounds'); await p.waitForTimeout(600);
     await p.click(`#vEngine .chip[data-v="${id}"]`);
-    await status('#engineStatus', 'ready'); await p.waitForTimeout(600); await idle();
+    await status('#engineStatus', 'ready');
+    // picking a voice plays a short sample; the one speak key would stop it, so wait for the sample to start and finish
+    await p.waitForFunction(() => document.querySelector('#tSpeak').classList.contains('playing'), null, { timeout: 300000 });
+    await p.waitForFunction(() => !document.querySelector('#tSpeak').classList.contains('playing'), null, { timeout: 300000 }); await idle();
     await p.goto(URL0 + '#translate'); await p.waitForTimeout(600);
     await p.fill('#enText', 'We came a long way to meet you. Will you speak with us?'); await p.dispatchEvent('#enText', 'input');
     await p.click('#tSpeak'); await status('#tStatus', 'of speech');
-    check(/of speech · made in/.test(await p.textContent('#tStatus')), `${label} speaks`);
-    await p.click('#tStop');
+    check(/of speech · made in/.test(await p.textContent('#tStatus')), `${label} speaks: ` + (await p.textContent('#tStatus')));
+    await p.evaluate(() => { const k = document.querySelector('#tSpeak'); if (k.classList.contains('playing')) k.click(); });
   }
   await p.goto(URL0 + '#audio'); await p.waitForTimeout(600);
   await p.setInputFiles('#fileTrack', sample); await status('#dInfo', 'phrases');
   await p.click('#dGo'); await status('#dStatus', 'made in');
-  check(/placed on the original’s timing · natural\+ · female/.test(await p.textContent('#dStatus')), 'loading another recording clears the old transcript, and it converts with a natural voice: ' + JSON.stringify(await p.textContent('#dStatus')));
+  check(/placed on the original’s timing · american woman \+/.test(await p.textContent('#dStatus')), 'loading another recording clears the old transcript, and it converts with a natural voice: ' + JSON.stringify(await p.textContent('#dStatus')));
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 } finally { await browser.close(); server.close(); }
 process.exit(failed ? 1 : 0);

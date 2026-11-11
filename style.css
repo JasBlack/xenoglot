@@ -3,8 +3,8 @@
    (family.css, Nov 2026); additions below are built only from those tokens.
    One extra face: Charis SIL, used only for the invented language itself,
    because it carries the IPA letters Plex Mono doesn't.
-   Layout: top bar · left column (language + numbered steps) · the active step.
-   Under 850 px: everything stacks and the steps become a bottom tab bar.
+   Layout: top bar (title · sections · library) · the speaker (head, name, speak) · the active section.
+   Under 850 px: the head sits on top, the section below it, and the sections become a bottom tab bar.
    ───────────────────────────────────────────────────────────────────────────── */
 :root{ color-scheme:dark; background:#121314; }
 body{
@@ -55,7 +55,7 @@ a{color:inherit}
 .brand:hover+.brand-ver,.brand-ver:hover{opacity:1}
 
 /* ── top bar ── */
-header.topbar{min-height:42px;flex:none;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:14px;padding:0 4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+header.topbar{min-height:42px;flex:none;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);max-width:1280px;width:100%;margin:0 auto;align-items:center;gap:14px;padding:0 4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
 header.topbar::before{content:"";position:absolute;inset:-12px -12px -6px;background:var(--case);z-index:-1}
 .hl,.hr,.transport{display:flex;align-items:center;gap:8px;min-width:0}
 .hl{gap:14px}
@@ -93,11 +93,16 @@ header.topbar::before{content:"";position:absolute;inset:-12px -12px -6px;backgr
 .led.rec.on{background:var(--rec);box-shadow:0 0 5px var(--rec)}
 
 /* ── layout: left column · the active step ── */
-main.console{display:grid;grid-template-columns:268px minmax(0,1fr) 344px;gap:12px;align-items:start;flex:1;min-width:0}
+main.console{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:12px;align-items:start;flex:1;min-width:0;max-width:1280px;width:100%;margin:0 auto}
 /* the monitor: the family's dark stage. Right column on wide screens, above the step on narrower ones */
 .headcol{display:flex;flex-direction:column;gap:8px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px);min-width:0}
 .monitor{border-radius:12px;background:var(--stage);border:1px solid var(--line);overflow:hidden}
-.monitor canvas{display:block;width:100%;height:min(60vh,480px);touch-action:pan-y;cursor:grab}
+.monitor canvas{display:block;width:100%;height:min(56vh,520px);touch-action:pan-y;cursor:grab}
+.headcol #langName{font:600 14px var(--mono);padding:8px 10px;text-align:center}
+.headkeys{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
+.headkeys .key{padding:0 8px;min-width:0}
+#tSpeak{height:46px;font-size:12px;letter-spacing:.08em}
+#tSpeak.playing{background:var(--ink);color:var(--inktext);border-color:var(--ink);box-shadow:0 2px 0 var(--shadow)}
 .monitor canvas:active{cursor:grabbing}
 header.topbar,main.console,.column,.view,.panel>*{min-width:0}
 .column{display:flex;flex-direction:column;gap:8px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px)}
@@ -146,8 +151,6 @@ textarea{min-height:92px;resize:vertical}
 .sm-only{display:none!important}
 .namerow{display:flex;gap:6px;align-items:center}
 .namerow input{flex:1;min-width:0}
-#langToggle{display:none;flex:none}
-.langmore{display:flex;flex-direction:column;gap:12px}
 .intro{border-color:var(--accent)}
 .control.dimmed{opacity:.45}
 .fitrow{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
@@ -175,17 +178,19 @@ details.more>summary::before{content:'›';color:var(--accent);font-weight:600;t
 details.more[open]>summary::before{transform:rotate(90deg)}
 details.more[open]>summary{margin-bottom:12px}
 
-/* ── left column ── */
-.langpanel input[type=text]{font:600 14px var(--mono);padding:8px 10px}
-.steps{display:flex;flex-direction:column;gap:6px;margin:0;padding:0}
-.steps a{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:1px 10px;padding:9px 11px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);text-decoration:none}
-.steps a i{grid-row:span 2;font-style:normal;width:18px;height:18px;display:grid;place-items:center;border-radius:50%;background:var(--ledoff);color:var(--case);font:600 10px var(--mono)}
-.steps a b{font:600 9px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--text)}
-.steps a small{grid-column:2;font-size:9px}
-.steps a .led{grid-row:1/span 2;grid-column:3}
-.steps a:hover{border-color:var(--muted)}
-.steps a[aria-current=page]{border-color:var(--keyline);background:var(--key);box-shadow:0 2px 0 var(--shadow),inset 0 0 0 1px var(--accent)}
-.steps a[aria-current=page] i{background:var(--accent);color:#0b0b0c}
+/* ── sections (tabs in the top bar) and the library ── */
+.langpanel{display:none;border-color:var(--keyline)}
+.langpanel.open{display:flex}
+.steps{display:flex;gap:3px;margin:0;padding:3px;border:1px solid var(--keyline);border-radius:11px;background:var(--well)}
+.steps a{display:flex;align-items:center;height:32px;padding:0 14px;border-radius:8px;color:var(--muted);text-decoration:none}
+.steps a b{font:600 9px var(--mono);letter-spacing:.2em;text-transform:uppercase}
+.steps a:hover{color:var(--text)}
+.steps a[aria-current=page]{color:var(--text);background:var(--key);box-shadow:0 1px 0 var(--shadow),0 0 0 1px var(--keyline),inset 0 -2px 0 var(--accent)}
+/* panels that fold away: the less-used parts of a section */
+details.panel.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;font:600 9px/1.3 var(--mono);letter-spacing:.2em;text-transform:uppercase}
+details.panel.fold>summary::-webkit-details-marker{display:none}
+details.panel.fold>summary::before{content:'›';color:var(--accent);font-weight:600;font-size:12px;transition:transform .15s}
+details.panel.fold[open]>summary::before{transform:rotate(90deg)}
 
 /* ── step 1: sounds ── */
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
@@ -275,53 +280,47 @@ details.more[open]>summary{margin-bottom:12px}
 #toast.visible{transform:none;opacity:1;visibility:visible}
 
 /* ── narrow screens ── */
-@media(max-width:1280px){
-  main.console{grid-template-columns:268px minmax(0,1fr)}
-  .column{grid-column:1;grid-row:1 / span 2} .headcol{grid-column:2;grid-row:1;position:static} .centre{grid-column:2;grid-row:2}
-  .monitor canvas{height:320px}
-}
-@media(max-width:1150px){ main.console{grid-template-columns:220px minmax(0,1fr)} .status{display:none} }
+@media(max-width:1000px){ main.console{grid-template-columns:minmax(260px,320px) minmax(0,1fr)} .steps a{padding:0 9px} }
 @media(max-width:850px){
-  body{font-size:12.5px;--tap:36px;padding-bottom:calc(86px + env(safe-area-inset-bottom,0px))}
-  header.topbar{grid-template-columns:1fr auto;row-gap:10px;position:static}
+  body{font-size:12.5px;--tap:36px;gap:8px;padding-top:8px;padding-bottom:calc(74px + env(safe-area-inset-bottom,0px))}
+  header.topbar{grid-template-columns:1fr auto;position:static;min-height:36px}
   header.topbar::before{display:none}
-  .transport{grid-row:2;grid-column:1/-1;justify-content:center}
-  .hr .key:not(.icon){display:none}
   main.console{display:flex;flex-direction:column;align-items:stretch}
-  .headcol{order:1;width:100%} .centre{order:2}
-  .monitor canvas{height:250px}
-  .headcol .hint{display:none}
-  .centre,.column{width:100%}
-  .column{position:static}
-  .steps{position:fixed;left:0;right:0;bottom:0;z-index:25;flex-direction:row;gap:4px;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));background:var(--panel);border-top:1px solid var(--line)}
-  .steps a{flex:1;min-width:0;grid-template-columns:1fr;justify-items:center;gap:3px;padding:7px 2px 6px;border:0;background:none;box-shadow:none}
-  .steps a i{grid-row:auto}
-  .steps a b{font-size:8.5px;letter-spacing:.08em}
-  .steps a small,.steps a .led{display:none}
-  .steps a[aria-current=page]{background:var(--key);box-shadow:inset 0 0 0 1px var(--accent)}
+  /* the speaker comes first: head, name, speak. Then whatever section is open */
+  .headcol{position:static;width:100%;gap:6px}
+  .monitor canvas{height:clamp(300px,52vh,520px)}
+  .centre{width:100%}
+  /* in the other sections the head shrinks to a strip: it still speaks the samples */
+  body:not([data-view=translate]) .monitor canvas{height:170px}
+  body:not([data-view=translate]) .headcol>:not(.monitor){display:none}
+  .steps{position:fixed;left:0;right:0;bottom:0;z-index:25;gap:4px;border:0;border-top:1px solid var(--line);border-radius:0;background:var(--panel);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .steps a{flex:1;min-width:0;justify-content:center;height:44px;padding:0 2px}
+  .steps a b{font-size:9.5px;letter-spacing:.1em}
+  .steps a[aria-current=page]{box-shadow:inset 0 0 0 1px var(--accent)}
   .key,button.key,a.key{height:40px;font-size:12px}
-  .transport .key{height:44px}
+  /* on a phone the head is the screen; the keys under it stay small */
+  .headcol{gap:5px}
+  .headcol .key{height:34px}
+  #tSpeak{height:40px;font-size:12px}
+  .headkeys .key{font-size:10px;padding:0 6px}
+  .headcol #langName{font-size:16px;padding:2px 10px;border-color:transparent;background:transparent}
+  header.topbar .key{height:32px;font-size:11px}
   .chip{font-size:11.5px}
   .panel h2{font-size:10.5px} .panel h2 > span + span{font-size:9px}
+  details.panel.fold>summary{font-size:10.5px}
   .hint{font-size:11.5px} .lede{font-size:13px}
   .control-top,.control-top em{font-size:11.5px}
   input[type=range]{height:28px}
   input[type=range]::-webkit-slider-thumb{width:20px;height:20px;margin-top:-9px}
   input[type=range]::-moz-range-thumb{width:20px;height:20px}
-  textarea,input[type=text],.langpanel input[type=text]{font-size:16px}
+  textarea,input[type=text]{font-size:16px}
+  #enText{min-height:74px}
   .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .sgrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
   .snd .tools button{height:32px;font-size:11px}
   .snd .h{font-size:10.5px}
   .lcd{font-size:11px}
-  footer.keys,.lg-only{display:none!important}
-  .sm-only{display:grid!important}
-  /* phones: the library folds behind one key so each step starts near the top of the screen */
-  #langToggle{display:inline-flex}
-  .langpanel .langmore{display:none}
-  .langpanel.open .langmore{display:flex}
-  .langpanel{gap:8px;padding:10px 12px}
-  .langpanel h2{display:none}
+  .lg-only{display:none!important}
   select{height:40px;font-size:13px}
   #toast{bottom:calc(84px + env(safe-area-inset-bottom,0px));left:16px;right:16px;max-width:none}
 }

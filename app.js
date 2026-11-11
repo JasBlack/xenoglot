@@ -74,10 +74,26 @@ const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 let toastTimer=0; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('visible'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('visible'),3200); }
 const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } } };
 
+/* ---------- accent: how a language is spoken, apart from which sounds it has ----------
+   Where the stress falls, how long vowels are held, how the pitch moves across a phrase (or carries tones),
+   how tightly words run together, and the pace. Two languages with the same sounds and the same voice
+   still sound like different languages. Stored on the language as L.accent and carried in share links. */
+const ACCENT0={stress:'first',stressLen:1.65,vLen:1,cLen:1,longV:0,melody:'fall',range:1,gap:1,tempo:1,final:1.35,qRise:true};   // how every language was spoken before 2.2.0
+const MELODY={fall:'falling',rise:'rising',wave:'sing-song',tone:'tonal',flat:'level',step:'stepping down'};
+function makeAccent(r){ const f=(lo,hi)=>+(lo+r()*(hi-lo)).toFixed(2);
+  return { stress:pick(r,['first','first','last','last','penult','penult','even']), stressLen:f(1.15,2.1), vLen:f(.78,1.35), cLen:f(.8,1.3), longV:r()<.5?f(.12,.38):0,
+    melody:pick(r,['fall','rise','wave','wave','tone','tone','flat','step']), range:f(.6,2.1), gap:f(.3,1.9), tempo:f(.82,1.22), final:f(1.05,1.9), qRise:r()<.65 }; }
+const acc=()=>({...ACCENT0,...(L&&L.accent||{})});
+// for one word: where its vowels are, which one is stressed, which are held long, and each syllable's tone
+function sylInfo(keys, A, w){ const vs=[]; keys.forEach((k,i)=>{ if(isV(k)) vs.push(i); }); const n=vs.length;
+  const si=!n||A.stress==='even' ? -1 : A.stress==='last' ? n-1 : A.stress==='penult' ? Math.max(0,n-2) : 0;
+  const hr=rngFrom(hash('len|'+w)), tr=rngFrom(hash('tone|'+w));
+  return { vs, stressAt:si<0?-1:vs[si], long:vs.map((_,j)=>A.longV>0 && j!==si && hr()<A.longV), tone:vs.map(()=>tr()<.5?1:-1) }; }
+
 /* ---------- language state ---------- */
 const DEFAULT = { name:'Velnari', seed: 7741, inv: ['a','e','i','o','u','ë','p','t','k','d','g','m','n','ŋ','s','š','v','z','l','ř','j','x','c'],
   onset:.85, coda:.35, cluster:.12, maxSyl:4, voice:{pitch:150,speed:1,formant:1.12,breath:.3,jitter:.45,growl:0,choir:0,ring:0,vib:.15,space:.25},
-  style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{}, engine:'synth' };
+  style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{}, engine:'synth', accent:{...ACCENT0} };
 const PRESETS = {
   'Natural voice':      {pitch:130,speed:1,formant:1,breath:.22,jitter:.45,growl:0,choir:0,ring:0,vib:.1,space:.2},
   'Soft and breathy':   {pitch:200,speed:.92,formant:1.15,breath:.55,jitter:.35,growl:0,choir:0,ring:0,vib:.15,space:.35},
@@ -202,28 +218,34 @@ let actx=null; function getCtx(){ if(!actx) actx = new (window.AudioContext||win
 function baseDur(p, stressed){ return p.t==='V' ? (stressed?.165:.1) : p.t==='stop' ? .09 : p.t==='click' ? .07 : p.t==='glottal' ? .07 : p.t==='fric' ? .1 : p.t==='trill' ? .1 : .07; }
 // word list -> segments. words: [{al, end:'.'|','|'?'|'' }]
 function wordsToSegs(words, voice, t0=0.12){
-  const segs=[]; let t=t0; const sp=voice.speed;
+  const segs=[]; let t=t0; const A=acc(), sp=voice.speed*A.tempo, R=A.range, base=voice.pitch;
   let phrase=[];
   const flush=(end)=>{
-    const n=phrase.length;
+    const n=phrase.length; let sylNo=0;
     phrase.forEach((wo, wi) => { const w=wo.al;
-      const keys=toKeys(w); const decl = 1.1 - .24*(n>1? wi/(n-1) : 0);
+      const keys=toKeys(w), pos=n>1? wi/(n-1) : 0, si=sylInfo(keys,A,w);
+      // the phrase's tune: falling, rising, stepping down word by word, or held level for the tunes that move per syllable
+      const decl = A.melody==='fall' ? 1+.1*R-.24*R*pos : A.melody==='rise' ? 1-.1*R+.22*R*pos : A.melody==='step' ? Math.max(.68, 1+.12*R-.085*R*wi) : 1.03-.06*pos;
       const wr=rngFrom(hash(w+wi)); const accent = 1 + (wr()-.4)*.12; // each word gets its own lilt
       const lastW = wi===n-1, lastQ = end==='?' && lastW;
-      const sIdx = keys.findIndex(isV); const lastV = keys.length-1-[...keys].reverse().findIndex(isV);
+      const lastV = si.vs.length ? si.vs[si.vs.length-1] : keys.length;
       keys.forEach((k, ki) => {
-        const p=PM[k]; const st = ki===sIdx;
-        let d = baseDur(p, st)/sp; if (recs[k] && !REC[p.t].hold) d = Math.min(recs[k].buf.duration, .16);
-        if (lastW && end && ki>=lastV) d *= 1.35;           // phrase-final lengthening
+        const p=PM[k], st = ki===si.stressAt, vj=si.vs.indexOf(ki), syl=Math.min(Math.max(si.vs.length-1,0), si.vs.filter(x=>x<ki).length);
+        let d = p.t==='V' ? .1*A.vLen*(st?A.stressLen : A.stress==='even'?1.25 : 1)*(vj>=0&&si.long[vj]?1.8:1) : baseDur(p,false)*A.cLen; d/=sp;
+        if (recs[k] && !REC[p.t].hold) d = Math.min(recs[k].buf.duration, .16);
+        if (lastW && end && ki>=lastV) d *= A.final*(lastQ&&!A.qRise?1.25:1);   // phrase-final lengthening
         d *= .92 + wr()*.16;                                 // no two syllables exactly alike
-        let pitch = voice.pitch*decl*accent*(st?1.14:.97);
-        if (lastQ) pitch = voice.pitch*(1 + .5*Math.pow((ki+1)/keys.length,1.5));
-        else if (end && end!==',' && lastW) pitch *= 1 - .16*(ki/keys.length);
-        segs.push({k, t, d, p:pitch, a: p.t==='V' ? (st?1:.72) : 1, w, en:wo.en}); t+=d;
+        const move = A.melody==='wave' ? 1+.13*R*Math.sin((sylNo+syl)*1.9) : A.melody==='tone' ? 1+.16*R*(si.tone[syl]||0) : 1;
+        let pitch = base*decl*accent*move*(st ? 1+(A.melody==='flat'?.05:A.melody==='tone'?.05:.14*Math.min(R,1.4)) : .97);
+        if (lastQ && A.qRise) pitch = base*(1 + .5*Math.pow((ki+1)/keys.length,1.5));
+        else if (end && end!==',' && lastW) pitch *= 1 - (lastQ?.26:.16)*(ki/keys.length);
+        pitch=Math.max(base*.55,Math.min(base*1.9,pitch));
+        segs.push({k, t, d, p:pitch, a: p.t==='V' ? (st||A.stress==='even'&&vj>=0?1:.72) : 1, w, en:wo.en}); t+=d;
       });
-      const gap=(.07+wr()*.05)/sp; segs.push({k:null, t, d:gap, p:voice.pitch*decl*.95}); t+=gap;
+      sylNo+=si.vs.length;
+      const gap=(.07+wr()*.05)*A.gap/sp; segs.push({k:null, t, d:gap, p:base*decl*.95}); t+=gap;
     });
-    if (end) { const d = end===',' ? .22/sp : .48/sp; segs.push({k:null,t,d,p:voice.pitch}); t+=d; }
+    if (end) { const d = end===',' ? .22/sp : .48/sp; segs.push({k:null,t,d,p:base}); t+=d; }
     phrase=[];
   };
   words.forEach(w => { if (w.al) phrase.push(w); if (w.end) flush(w.end); });
@@ -370,11 +392,21 @@ function normalise(d){ const n=d.length, step=Math.max(1,Math.floor(n/60000)), a
 // models come from Hugging Face; on localhost a ?hf= address can point at a local copy, for tests
 const HF=(/^(127\.0\.0\.1|localhost)$/.test(location.hostname) && new URLSearchParams(location.search).get('hf')) || 'https://huggingface.co/';
 const KOKORO=HF+'onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
+const PIPER=HF+'rhasspy/piper-voices/resolve/main/', KMODEL=KOKORO+'onnx/model_quantized.onnx';
+// Voices trained on other languages speak the same sounds with a different mouth: the cheapest way to stop every language sounding English.
+// quick = Piper (one 63 MB file each). lifelike = Kokoro (one 92 MB model shared by all, plus half a megabyte per voice), slower to make.
 const NATURAL={
-  kristin:{kind:'piper', label:'natural · female', url:HF+'rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
-  norman:{kind:'piper', label:'natural · male', url:HF+'rhasspy/piper-voices/resolve/main/en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
-  heart:{kind:'kokoro', label:'natural+ · female', model:KOKORO+'onnx/model_quantized.onnx', style:KOKORO+'voices/af_heart.bin', pitch:205, mb:92},
-  michael:{kind:'kokoro', label:'natural+ · male', model:KOKORO+'onnx/model_quantized.onnx', style:KOKORO+'voices/am_michael.bin', pitch:115, mb:92},
+  kristin:{kind:'piper', label:'american woman', url:PIPER+'en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
+  norman:{kind:'piper', label:'american man', url:PIPER+'en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
+  harri:{kind:'piper', label:'finnish man', url:PIPER+'fi/fi_FI/harri/medium/fi_FI-harri-medium', pitch:105, mb:63},
+  anna:{kind:'piper', label:'hungarian woman', url:PIPER+'hu/hu_HU/anna/medium/hu_HU-anna-medium', pitch:200, mb:63},
+  vais:{kind:'piper', label:'vietnamese woman', url:PIPER+'vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium', pitch:230, mb:63, len:1.35}   /* this voice rushes sounds it doesn't know, so it is slowed */,
+  heart:{kind:'kokoro', label:'american woman +', model:KMODEL, style:KOKORO+'voices/af_heart.bin', pitch:205, mb:92},
+  michael:{kind:'kokoro', label:'american man +', model:KMODEL, style:KOKORO+'voices/am_michael.bin', pitch:115, mb:92},
+  alpha:{kind:'kokoro', label:'japanese woman +', model:KMODEL, style:KOKORO+'voices/jf_alpha.bin', pitch:230, mb:92},
+  yunjian:{kind:'kokoro', label:'mandarin man +', model:KMODEL, style:KOKORO+'voices/zm_yunjian.bin', pitch:120, mb:92},
+  hindi:{kind:'kokoro', label:'hindi woman +', model:KMODEL, style:KOKORO+'voices/hf_alpha.bin', pitch:210, mb:92},
+  nicola:{kind:'kokoro', label:'italian man +', model:KMODEL, style:KOKORO+'voices/im_nicola.bin', pitch:120, mb:92},
 };
 const modelUrl=v=>v.kind==='kokoro' ? v.model : v.url+'.onnx';
 // Kokoro's sound set lacks three of Xenoglot's: g is written ɡ there; ɬ and the click get their nearest neighbours
@@ -414,18 +446,30 @@ async function piperVoice(id){
     let sess; try{ sess=await sessions[key]; }catch(e){ delete sessions[key]; throw e; }
     naturalStatus(`${v.label} ready`); voiceReady[id]=true; setTimeout(updateEst); return {sess,cfg,O,style,kind:v.kind};
   }catch(e){ delete piper[id]; naturalStatus(''); throw e; } })(); }
-// phrases of IPA, stress on each word's first syllable, punctuation kept for phrasing
+// a word in IPA for the neural voices: the stress mark goes where this language's accent puts it, and long vowels get a length mark
+function wordIpa(w){ const keys=toKeys(w); if(!keys.length) return ''; const si=sylInfo(keys,acc(),w); let at=-1, out='';
+  if(si.stressAt>=0){ at=si.stressAt; while(at>0 && !isV(keys[at-1])) at--; if(at>0 && si.stressAt-at>1) at++; }   /* of two consonants between vowels, the first closes the syllable before */
+  keys.forEach((k,i)=>{ if(i===at) out+='ˈ'; out+=PM[k].ipa; const j=si.vs.indexOf(i); if(j>=0 && si.long[j]) out+='ː'; }); return out; }
+// phrases of IPA, punctuation kept for phrasing
 function ipaPhrases(words){ const out=[]; let cur=[], ws=[];
-  words.forEach(w=>{ const ipa=toKeys(w.al).map(k=>PM[k].ipa).join(''); if(ipa){ cur.push('ˈ'+ipa); ws.push({al:w.al,en:w.en}); }
+  words.forEach(w=>{ const ipa=wordIpa(w.al); if(ipa){ cur.push(ipa); ws.push({al:w.al,en:w.en}); }
     if(w.end){ if(cur.length) out.push({ipa:cur.join(' ')+(w.end===','?',':w.end==='?'?'?':'.'), end:w.end, words:ws}); cur=[]; ws=[]; } });
   if(cur.length) out.push({ipa:cur.join(' ')+'.', end:'.', words:ws}); return out; }
+// A neural voice brings its own tune. The language's melody is laid over it as a gentle pitch bend across each phrase (cents).
+function melodyCurve(dur, end, seed){ const A=acc(), R=Math.min(A.range,1.7), n=Math.max(8,Math.min(64,Math.round(dur*10))), c=new Float32Array(n), r=rngFrom(hash('mel|'+seed)); let lvl=0, hold=0;
+  if(A.melody==='flat') return null;
+  for(let i=0;i<n;i++){ const u=i/(n-1);
+    c[i] = A.melody==='fall' ? (55-120*u)*R : A.melody==='rise' ? (-60+130*u)*R : A.melody==='step' ? (70-45*Math.floor(u*4))*R : A.melody==='wave' ? 85*R*Math.sin(u*dur*6.5) : 0;
+    if(A.melody==='tone'){ if(hold--<=0){ lvl=(r()<.5?-1:1)*(70+r()*50)*R; hold=1+Math.floor(r()*2); } c[i]=lvl; }
+    if(end==='?' && A.qRise && u>.75) c[i]+=260*(u-.75)*4*.6; }
+  return c; }
 // The neural voices don't report when each sound happens, so the head's lip-sync for them is worked out:
 // the synthesizer's own timing for the same words, stretched over the clip. Loudness gating does the rest.
 function spreadSegs(words, t0, dur){ const s0=wordsToSegs(words.map(w=>({al:w.al,en:w.en})),{...DEFAULT.voice,...L.voice,speed:1},0).segs.filter(s=>s.k||s.d<.2);
   while(s0.length && !s0[s0.length-1].k) s0.pop(); if(!s0.length) return [];
   const end=s0[s0.length-1].t+s0[s0.length-1].d, k=dur/(end||1); return s0.map(s=>({...s,t:t0+s.t*k,d:s.d*k})); }
 function phonemeIds(ipa,cfg){ const m=cfg.phoneme_id_map, pad=m['_']; const ids=[...m['^'],...pad];
-  for(const ch of [...ipa]){ const id=m[ch]; if(id) ids.push(...id,...pad); } ids.push(...m['$']); return ids; }
+  for(const ch of [...ipa]){ const id=m[ch]||(ch==='g'?m['ɡ']:null); if(id) ids.push(...id,...pad); } ids.push(...m['$']); return ids; }
 // Kokoro: one id per symbol, wrapped in the pad token 0; at most 510 tokens per run
 function kokoroIds(ipa,cfg){ const v=cfg.vocab, ids=[0];
   for(const ch of [...ipa].slice(0,508)){ const c=KOKORO_SUB[ch]||ch; if(v[c]!=null) ids.push(v[c]); } ids.push(0); return ids; }
@@ -456,10 +500,10 @@ async function naturalRun(V, ipa, lengthScale, voice){ const {sess,cfg,O,style,k
   const n=parts.reduce((a,c)=>a+c.length,0), raw=new Float32Array(n); let o=0; for(const c of parts){ raw.set(c,o); o+=c.length; } return raw; }
 async function speakNatural(words, voice){
   voice={...DEFAULT.voice,...voice}; const V=await piperVoice(L.engine), v=NATURAL[L.engine], sr=V.cfg.audio.sample_rate;
-  const rate=voiceRate(voice,v), lengthScale=Math.min(2.5,Math.max(.4, rate/voice.speed));
+  const rate=voiceRate(voice,v), lengthScale=Math.min(2.5,Math.max(.4, rate/(voice.speed*acc().tempo)*(v.len||1)));
   const clips=[], segs=[]; let t=0;
   for(const ph of ipaPhrases(words)){ const raw=await naturalRun(V, ph.ipa, lengthScale, voice); if(!raw.length) continue;
-    const d=raw.length/sr/rate; clips.push({raw,t}); segs.push(...spreadSegs(ph.words,t+.03,d-.08)); t+=d+(ph.end===','?.12:.3)*lengthScale/rate; }
+    const d=raw.length/sr/rate; clips.push({raw,t,curve:voice.fitting?null:melodyCurve(d,ph.end,ph.ipa)}); segs.push(...spreadSegs(ph.words,t+.03,d-.08)); t+=d+(ph.end===','?.12:.3)*lengthScale/rate; }
   if(!clips.length) throw new Error('Nothing to say yet. Type some English first.');
   const b=await naturalFx(clips, sr, voice, rate, t); b.timeline={segs}; return b;
 }
@@ -471,6 +515,7 @@ async function naturalFx(clips, srIn, voice, rate, dur, extra={}){
   const lfo=ctx.createOscillator(); lfo.frequency.value=4.6+voice.vib*2; lfo.start(0);
   for(const c of clips){ const buf=ctx.createBuffer(1, c.raw.length, srIn); buf.copyToChannel(c.raw,0);
     const voiceSrc=(cents,gain,delay)=>{ const s=ctx.createBufferSource(); s.buffer=buf; s.playbackRate.value=rate*(c.squeeze||1); s.detune.value=cents;
+      if(c.curve){ try{ s.detune.setValueCurveAtTime(c.curve.map(x=>x+cents), c.t+delay, Math.max(.05,c.raw.length/srIn/rate-.02)); }catch(e){} }
       const lg=ctx.createGain(); lg.gain.value=voice.vib*45; lfo.connect(lg).connect(s.detune); const g=ctx.createGain(); g.gain.value=gain; s.connect(g).connect(mix); s.start(c.t+delay); };
     voiceSrc(0,1,0);
     if(voice.choir>0){ voiceSrc(6+voice.choir*6, voice.choir*.7, .012); voiceSrc(-(7+voice.choir*6), voice.choir*.7, .021); } }
@@ -504,10 +549,11 @@ let playing=null;
 // the speaking head on the monitor (head.js); every language has its own, grown from L.head
 const head = window.XenoHead && $('#headCanvas') ? XenoHead.create($('#headCanvas'), {sounds:PM}) : null;
 let headSeed=null;
+function speakKey(on){ const k=$('#tSpeak'); if(!k) return; k.innerHTML=on?'&#x25A0; stop':'&#x25B6; speak'; k.classList.toggle('playing',on); }
 function applyHead(){ if(!head) return; if(headSeed!==L.head){ headSeed=L.head; head.setSeed(L.head>>>0); $('#headCanvas').dataset.seed=String(L.head>>>0); } head.setInfo({name:L.name||''}); }
-function stopAudio(){ if(head) head.stop(); $('#ledVoice').classList.remove('on'); $('#tpSpeak').innerHTML='&#x25B6; speak'; if(playing){ try{ playing.src.stop(); }catch(e){} cancelAnimationFrame(playing.raf); const p=playing; playing=null; p.done&&p.done(); } }
+function stopAudio(){ if(head) head.stop(); $('#ledVoice').classList.remove('on'); speakKey(false); if(playing){ try{ playing.src.stop(); }catch(e){} cancelAnimationFrame(playing.raf); const p=playing; playing=null; p.done&&p.done(); } }
 function play(buf, canvas, alsoTo, onEnd){
-  setTimeout(()=>{ $('#ledVoice').classList.add('on'); $('#tpSpeak').innerHTML='&#x25A0; stop'; });
+  setTimeout(()=>{ $('#ledVoice').classList.add('on'); speakKey(true); });
   stopAudio(); const ctx=getCtx(); const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); if(alsoTo) src.connect(alsoTo);
   const t0=ctx.currentTime; src.start();
   if(head) head.speak({buf, timeline:buf.timeline, clock:()=>ctx.currentTime-t0});
@@ -789,12 +835,10 @@ async function splitTake(ab){
 $('#takeBtn').addEventListener('click',()=>$('#fileTake').click());
 $('#fileTake').addEventListener('change',async e=>{ const f=e.target.files[0]; e.target.value=''; if(f) await splitTake(await f.arrayBuffer()); });
 $('#takeRec').addEventListener('click',async e=>{ const ab=await micRecord(e.currentTarget,0); if(ab) await splitTake(ab); });
-$('#recTop').addEventListener('click',async e=>{ if(!micStop){ location.hash='sounds'; setTimeout(()=>$('#takeOrder').scrollIntoView({block:'center'}),60); toast('say each sound in order with a short pause, then press stop'); } const ab=await micRecord(e.currentTarget,0); if(ab) await splitTake(ab); });
-
 function syllableCount(){ const c=C().length, v=V().length, cl=clusterSeconds().length;
   const on=(L.onset<1?1:0)+(L.onset>0?c:0)+(L.cluster>0&&L.onset>0?c*Math.max(0,cl-0):0); const co=(L.coda<1?1:0)+(L.coda>0?c:0); return on*v*co; }
 function updateCounts(){
-  const c=C().length, v=V().length; $('#youN').textContent=c+v; $('#youL').textContent=`${c+v} sounds`; sideLcd();
+  const c=C().length, v=V().length; $('#youN').textContent=c+v; sideLcd();
   const S=syllableCount(); let words=0; for(let n=1;n<=L.maxSyl;n++) words+=Math.pow(S,n);
   const three=Math.pow(S,3);
   const html=`With your <b>${c+v}</b> sounds and current word rules there are <b>${fmt(S)}</b> possible syllables, <b>${fmt(three)}</b> three-syllable words and <b>${fmt(words)}</b> words of up to ${L.maxSyl} syllable${L.maxSyl>1?'s':''}. An adult English speaker uses about 20,000 words, so ${words>=20000?'that is plenty.':'you may want more sounds or longer words.'}<br><span class="muted">For comparison: Rotokas’ 11 sounds in simple consonant-vowel syllables give 30 syllables and 27,000 three-syllable words.</span>`.replace('<span class="muted">','<span class="dim">');
@@ -822,7 +866,6 @@ function renderTranslate(){
   const sc=$('#outScript'); sc.classList.toggle('rtl',rtl);
   sc.innerHTML=toks.filter(t=>t.t!=='sp').map(t=>t.t==='w'?wordSVG(t.al,rtl):t.t==='nl'?'<span style="flex-basis:100%"></span>':`<span class="pn">${esc(t.s)}</span>`).join('');
   $('#outIpa').textContent='/'+toks.filter(t=>t.t==='w').map(t=>ipaOf(t.al)).join(' ')+'/';
-  $('#tName').textContent='into '+(L.name||'your language').toLowerCase();
   updateEst();
 }
 const romanText=()=>(lastT||[]).map(t=>t.t==='w'?t.al:t.t==='nl'?'\n':t.t==='sp'?' ':t.s).join('');
@@ -832,6 +875,7 @@ let tBuf=null;
    learned ratio, refined after every real result, as is the time each engine takes to make a second of audio. */
 const tailOf=v=>v.space>0 ? .2+v.space*1.6 : 0;
 const pace={len:{synth:1,kristin:.82,norman:.66,heart:.8,michael:.8}, work:{synth:.08,kristin:.45,norman:.55,heart:.6,michael:.6}, passes:1.6}; // work = seconds per pass per second of audio; passes = average natural passes when fitting
+for(const [id,v] of Object.entries(NATURAL)){ pace.len[id] ??= .8; pace.work[id] ??= v.kind==='kokoro' ? 2 : .45; }   // voices without measured figures start from a typical one and learn
 try{ const s=JSON.parse(store.get('xenoglot-v1-pace')||'null'); if(s&&s.len&&s.work){ Object.assign(pace.len,s.len); Object.assign(pace.work,s.work); } }catch(e){}
 const engineNow=()=>NATURAL[L.engine] ? L.engine : 'synth';
 const fmtS=s=>s<60 ? (s<10?s.toFixed(1):Math.round(s))+' s' : Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0');
@@ -873,8 +917,7 @@ async function getTBuf(){ if(!tBuf){ $('#tStatus').textContent='synthesizing…'
     $('#tStatus').textContent=msg; setStatus(msg); } return tBuf; }
 $('#fitOn').addEventListener('change',e=>{ fit.on=e.target.checked; $('#fitCtl').hidden=!fit.on; $('#fitHint').hidden=!fit.on; if(fit.on) fit.secs=0; tBuf=null; updateEst(); });
 $('#fitSecs').addEventListener('input',e=>{ fit.secs=+e.target.value; tBuf=null; updateEst(); });
-$('#tSpeak').addEventListener('click',async()=>{ getCtx(); play(await getTBuf(),$('#waveT')); });
-$('#tStop').addEventListener('click',stopAudio);
+$('#tSpeak').addEventListener('click',()=>{ if(location.hash.slice(1)!=='translate' && !playing) location.hash='translate'; speakNow(); });
 $('#tSaveAudio').addEventListener('click',async()=>exportAudio(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
 $('#tSaveMp3').addEventListener('click',async()=>exportMp3(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
 $('#tShare').addEventListener('click',async()=>shareAudio(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
@@ -1019,7 +1062,7 @@ function renderGlyphs(){
   $('#glyphs').innerHTML=inv.map(p=>`<button class="gcell${p.k===selK?' sel':''}" data-k="${p.k}" aria-label="Letter for ${p.k}"><svg viewBox="-14 -14 128 128">${glyphInner(p.k)}</svg><span>${p.k} /${p.ipa}/</span></button>`).join('');
   drawEditor(); refreshFontPreview();
 }
-$('#glyphs').addEventListener('click',e=>{ const b=e.target.closest('.gcell'); if(!b) return; selK=b.dataset.k; $$('.gcell').forEach(x=>x.classList.toggle('sel',x===b)); drawEditor(); });
+$('#glyphs').addEventListener('click',e=>{ const b=e.target.closest('.gcell'); if(!b) return; selK=b.dataset.k; $$('.gcell').forEach(x=>x.classList.toggle('sel',x===b)); const fold=cv.closest('details'); if(fold) fold.open=true; drawEditor(); });
 const cv=$('#gCanvas');
 function drawEditor(){
   const g=cv.getContext('2d'); const W=cv.width, sc=W/150, cs=getComputedStyle(document.body);
@@ -1094,28 +1137,33 @@ function setStatus(msg){ $('#statusLine').textContent=msg; statusHold=Date.now()
 async function playSample(){ if(playSample.busy) return; playSample.busy=true;
   try{ const words=tokensToWords(translate('Hello, traveler. Will you speak with us?',false)); getCtx(); play(await speakWords(words)); } finally { playSample.busy=false; } }
 $('#vTry').addEventListener('click',playSample);
-function syncSliders(){ SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
+function syncSliders(){ renderAccent(); SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
 
 /* ---------- state changes ---------- */
 let rerenderT=0;
 function changed(){ wordCache=new Map(); tBuf=null; saveLang(); updateCounts(); clearTimeout(rerenderT); rerenderT=setTimeout(()=>{ renderTranslate(); renderAffixes(); if(!$('#v-words').hidden) renderLex(); if(!$('#v-script').hidden) renderGlyphs(); },120); }
-$('#langName').addEventListener('input',e=>{ L.name=e.target.value; saveLang(); updateCounts(); $('#tName').textContent=L.name; });
+$('#langName').addEventListener('input',e=>{ L.name=e.target.value; saveLang(); updateCounts(); });
 
+function renderAccent(){ const el=$('#accentInfo'); if(!el) return; const A=acc(), stress={first:'stress on the first syllable',last:'stress on the last syllable',penult:'stress on the second-to-last syllable',even:'every syllable even'}[A.stress];
+  el.innerHTML=`<span><b>${MELODY[A.melody]}</b> melody${A.melody==='flat'?'':', '+(A.range>1.5?'wide':A.range<.95?'narrow':'medium')+' range'} · ${stress} · ${A.longV?'long and short vowels':'vowels all one length'} · ${A.gap<.8?'words run together':A.gap>1.35?'words set apart':'even spacing'} · ${A.tempo>1.08?'quick':A.tempo<.93?'slow':'steady'}</span>`; }
+$('#accentNew').addEventListener('click',()=>{ L.accent=makeAccent(rngFrom(Math.random()*4e9)); tBuf=null; saveLang(); renderAccent(); sideLcd(); playSample(); });
+function randomVoice(r){ const speechy=['Natural voice','Natural voice','Soft and breathy','Giant','Small creature','Ethereal','Gravel beast','Hive choir']; const base=PRESETS[pick(r, r()<.8?speechy:Object.keys(PRESETS))]; const j=(v,a,lo,hi)=>+Math.max(lo,Math.min(hi,v+(r()-.5)*a)).toFixed(2);
+  return {...base,pitch:Math.round(j(base.pitch,90,45,400)),formant:j(base.formant,.35,.6,1.7),breath:j(base.breath,.3,0,1),jitter:j(base.jitter,.3,0,1),vib:j(base.vib,.3,0,1)}; }
 function randomLanguage(){
   const r=rngFrom(Math.random()*4e9);
   // common sounds turn up far more often than rare ones, as they do across real languages
   const vPool=['a','a','i','i','u','u','e','e','o','o','ë','ä','y','ö','ů']; const nv=4+Math.floor(r()*4); const vs=new Set(['a','i','u']); while(vs.size<nv) vs.add(pick(r,vPool));
   const cPool='t t k k m m n n s s l l p p d d g b r r j j w h v z š f ŋ x ř ž þ q ł c ʔ'.split(' '); const nc=8+Math.floor(r()*10);
   const cs=new Set(['t','k','m','n'].filter(()=>r()<.85)); while(cs.size<nc) cs.add(pick(r,cPool));
+  const keep={head:L.head, engine:L.engine, voice:{...L.voice}};   // the creature stays: same head, same voice. Only its language changes.
   L={ name:'', seed:Math.floor(r()*1e6), inv:[...vs,...cs], onset:.75+r()*.25, coda:r()*.4, cluster:r()<.6?0:r()*.2, maxSyl:3+Math.floor(r()*2),
-    voice:(()=>{ const speechy=['Natural voice','Natural voice','Soft and breathy','Giant','Small creature','Ethereal','Gravel beast','Hive choir']; const base=PRESETS[pick(r, r()<.85?speechy:Object.keys(PRESETS))]; const j=(v,a,lo,hi)=>+Math.max(lo,Math.min(hi,v+(r()-.5)*a)).toFixed(2);
-      return {...base,pitch:Math.round(j(base.pitch,80,45,400)),formant:j(base.formant,.3,.6,1.7),breath:j(base.breath,.3,0,1),jitter:j(base.jitter,.3,0,1),vib:j(base.vib,.3,0,1)}; })(),
-    style:pick(r,Object.keys(STYLES)), pen:pick(r,['round','nib','brush','hair']), weird:+(r()*.7).toFixed(2), slant:+((r()-.5)*.5).toFixed(2), gseed:Math.floor(r()*4294967295), weight:+(5+r()*9).toFixed(1), glyphs:{}, lexicon:{}, head:Math.floor(r()*4294967295) };
+    voice:keep.voice, engine:keep.engine, accent:makeAccent(r),
+    style:pick(r,Object.keys(STYLES)), pen:pick(r,['round','nib','brush','hair']), weird:+(r()*.7).toFixed(2), slant:+((r()-.5)*.5).toFixed(2), gseed:Math.floor(r()*4294967295), weight:+(5+r()*9).toFixed(1), glyphs:{}, lexicon:{}, head:keep.head };
   L.onset=+L.onset.toFixed(2); L.coda=+L.coda.toFixed(2); L.cluster=+L.cluster.toFixed(2);
   wordCache=new Map(); L.name=cap(root('our language people').slice(0,9)) || 'Unnamed';
   genAlphabet(false);
 }
-$('#btnRandom').addEventListener('click',async()=>{ randomLanguage(); await useLang(L,{fresh:true,recsObj:{}}); toast(`Meet ${L.name}: ${L.inv.length} sounds. Your other languages are under my languages.`); });
+$('#btnRandom').addEventListener('click',async()=>{ randomLanguage(); await useLang(L,{fresh:true,recsObj:{}}); toast(`${L.name}: ${L.inv.length} sounds, ${MELODY[acc().melody]} speech. The others are in the library.`); });
 
 
 /* ---------- library: every language is kept in this browser ---------- */
@@ -1129,6 +1177,8 @@ function saveLangNow(){ clearTimeout(saveT); if(!L.id) L.id=newId(); lib.langs[L
 function saveLang(){ clearTimeout(saveT); saveT=setTimeout(saveLangNow,300); }
 function normaliseLang(o){ if(!o||!Array.isArray(o.inv)||!o.voice) throw new Error('not a language');
   const n={...structuredClone(DEFAULT),...structuredClone(o)}; n.voice={...DEFAULT.voice,...o.voice}; n.inv=n.inv.filter(k=>PM[k]); if(!n.inv.some(isV)) n.inv.push('a');
+  if(!o.accent||typeof o.accent!=='object') n.accent=String(n.seed)===String(DEFAULT.seed)&&n.name===DEFAULT.name ? {...ACCENT0} : makeAccent(rngFrom(hash(String(n.seed)+'|accent')));   // languages from before accents get one of their own, the same every time
+  else n.accent={...ACCENT0,...o.accent};
   if(typeof n.head!=='number') n.head=hash(String(n.seed)+'|head');   // older languages get a head of their own, the same one every time
   n.glyphs=n.glyphs&&typeof n.glyphs==='object'?n.glyphs:{}; n.lexicon=n.lexicon&&typeof n.lexicon==='object'?n.lexicon:{}; delete n.recordings; delete n.xenoglot; delete n.updated; return n; }
 async function useLang(o,{recsObj=null,fresh=false}={}){
@@ -1191,7 +1241,8 @@ document.addEventListener('drop',e=>{ document.body.classList.remove('dropping')
   else toast('Drop a language file (.json) or an audio track.'); });
 
 /* ---------- the monitor: a new head, and video of it speaking, recorded straight off the screen ---------- */
-$('#headNew').addEventListener('click',()=>{ L.head=Math.floor(Math.random()*4294967295); applyHead(); saveLang(); });
+// a new creature: another head and another voice character, speaking the same language
+$('#headNew').addEventListener('click',()=>{ const r=rngFrom(Math.random()*4e9); L.head=Math.floor(r()*4294967295); L.voice=randomVoice(r); tBuf=null; applyHead(); syncSliders(); saveLang(); playSample(); });
 // H.264 + AAC in .mp4 plays everywhere (phones, WhatsApp, Instagram); browsers without that encoder fall back to .webm
 const VIDEO_TYPES=[['video/mp4;codecs="avc1.42E01E,mp4a.40.2"','mp4'],['video/mp4;codecs="avc1.640028,mp4a.40.2"','mp4'],['video/webm;codecs=vp9,opus','webm'],['video/webm;codecs=vp8,opus','webm'],['video/webm','webm'],['video/mp4','mp4']];
 const canShareFile=f=>{ try{ return !!navigator.canShare && navigator.canShare({files:[f]}); }catch(e){ return false; } };
@@ -1222,16 +1273,15 @@ $('#headShare').addEventListener('click',async()=>{ if(!videoKeep) return; try{ 
 if(!store.get('xenoglot-v1-seen')) $('#intro').hidden=false;
 const closeIntro=()=>{ $('#intro').hidden=true; store.set('xenoglot-v1-seen','1'); };
 $('#introClose').addEventListener('click',closeIntro);
-$('#introSpeak').addEventListener('click',()=>{ location.hash='translate'; speakNow(); });
-$('#introNew').addEventListener('click',()=>{ closeIntro(); location.hash='translate'; $('#btnRandom').click(); });
+$('#introSpeak').addEventListener('click',()=>{ closeIntro(); location.hash='translate'; speakNow(); });
 $('#langToggle').addEventListener('click',e=>{ const open=$('.langpanel').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded',open); });
 
 /* ---------- routing ---------- */
-const VIEWS=['sounds','words','translate','audio','script']; const visited=new Set();
+const VIEWS=['translate','sounds','words','audio','script']; const visited=new Set();
 function route(){ const v=VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'translate'; // home is where the language gets used
   const was=VIEWS.find(x=>!$('#v-'+x).hidden);
   VIEWS.forEach(x=>$('#v-'+x).hidden=x!==v); $$('.steps a').forEach(a=>a.toggleAttribute('aria-current',false)); $(`.steps a[data-v="${v}"]`).setAttribute('aria-current','page');
-  visited.add(v); $$('.steps .led').forEach(l=>l.className='led'+(visited.has(l.dataset.led)?' on':''));
+  visited.add(v); document.body.dataset.view=v;
   if(was && was!==v) window.scrollTo({top:0});
   if(v==='words') renderLex(); if(v==='script') renderGlyphs(); if(v==='translate') renderTranslate(); }
 window.addEventListener('hashchange',route);
@@ -1251,17 +1301,13 @@ const captureDefaults=()=>$$('input[type=range]').forEach(el=>{ rangeDefaults.se
 document.addEventListener('contextmenu',e=>{ const el=e.target; if(e.defaultPrevented||!(el instanceof HTMLInputElement)||el.type!=='range'||el.disabled) return;
   e.preventDefault(); const d=rangeDefaults.get(el)??el.defaultValue; if(el.value===d) return; el.value=d; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); });
 
-/* ---------- every control shown: sections start open ---------- */
-$$('details.more').forEach(d=>d.open=true);
 
 /* ---------- transport + shortcuts ---------- */
 async function speakNow(){ if(playing){ stopAudio(); return; } getCtx(); if(!lastT) renderTranslate(); const buf=await getTBuf(); play(buf, $('#v-translate').hidden?null:$('#waveT')); }
-$('#tpSpeak').addEventListener('click',speakNow);
 $$('[data-proxy]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.proxy).click()));
 document.addEventListener('keydown',e=>{ if(e.metaKey||e.ctrlKey||e.altKey) return; const t=e.target; if(t.closest&&t.closest('input,textarea,select,[contenteditable]')) return;
   if(e.code==='Space'){ e.preventDefault(); speakNow(); }
-  else if(e.key==='n'||e.key==='N'){ $('#btnRandom').click(); }
-  else if(/^[1-5]$/.test(e.key)){ location.hash=VIEWS[+e.key-1]; } });
+  else if(e.key==='n'||e.key==='N'){ $('#btnRandom').click(); } });
 
 /* ---------- boot ---------- */
 $('#e44').innerHTML=ENG44.map(([i,w])=>`<div><span class="ipa">${i}</span><span>${w}</span></div>`).join('');

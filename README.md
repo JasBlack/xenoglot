@@ -1,20 +1,20 @@
 # Xenoglot
 
-Build a new spoken language on top of English grammar, entirely in your browser.
+Invent spoken alien languages that sound unique and real, entirely in your browser. A wireframe creature speaks them.
 
 **Live:** https://xenoglot.jas.black
 
 ![Xenoglot](og.jpg)
 
-1. **Sounds**: choose your language's sounds from 37 (vowels, stops, hisses, clicks, rolled r…) and give them a voice. Pick the **built-in** synthesizer or a **natural** neural voice (female or male), then a character: ten presets go from a plain voice to a giant, a whispering spirit or a hive choir. You can replace any sound with your own voice, and each sound tells you how to record it.
-2. **Words**: every English word gets a permanent new word built from your sounds. Grammar stays English: same word order, and plural, past tense, *-ing*, possessive, *n't* and *-ly* become fixed endings. Edit any word in the dictionary.
-3. **Translate**: type English and get the new language written in Latin letters, in its own script and as pronunciation (IPA). As you type it shows how long the speech will be and how long it takes to make. Turn on **fit to a length** to pick an exact length: the voice speeds up or slows down to match, within half to double speed. Hear it and save the audio as an **.mp3 for sharing** (small, plays in WhatsApp, messages and on any phone) or a full-quality **.wav** for editing.
-4. **Audio**: drop in a recording of English speech. Xenoglot listens to it and writes down what is said, phrase by phrase with timings (speech-to-text runs in your browser), then speaks it again in your language, each phrase landing where the original was. You can edit the words first, and the new track uses whichever voice you chose.
-5. **Script**: generate an alphabet (14 styles, 4 pens, weirdness and slant), redraw any letter by hand, and download it as an installable font (.otf, with capitals and basic punctuation) or an alphabet chart (.svg).
+- **Speak**: type English and press **speak**. The creature says it in its language, shown in Latin letters, in its own script and as pronunciation (IPA). It tells you how long the speech will be, can **fit to a length** you choose (half to double speed), and saves the audio as a small **.mp3** for sharing or a full-quality **.wav**. **New language** gives the same creature a different language; **new creature** gives the language a different head and voice.
+- **Voice**: who is speaking and how. Pick the **built-in** synthesizer (instant, the most alien) or one of eleven recorded voices trained on different languages, then a character (ten presets from a plain voice to a giant, a whispering spirit or a hive choir). Every language also has its own **accent**: where the stress falls, long and short vowels, a falling, rising, sing-song, tonal, level or stepping melody, how tightly words run together, and its pace. Choose the language's sounds from 37 (vowels, stops, hisses, clicks, rolled r…), or replace any sound with your own voice.
+- **Words**: every English word gets a permanent new word built from your sounds. Grammar stays English: same word order, and plural, past tense, *-ing*, possessive, *n't* and *-ly* become fixed endings. Edit any word in the dictionary.
+- **Audio**: drop in a recording of English speech. Xenoglot listens to it and writes down what is said, phrase by phrase with timings (speech-to-text runs in your browser), then speaks it again in your language, each phrase landing where the original was. You can edit the words first, and the new track uses whichever voice you chose.
+- **Script**: generate an alphabet (14 styles, 4 pens, weirdness and slant), redraw any letter by hand, and download it as an installable font (.otf, with capitals and basic punctuation) or an alphabet chart (.svg).
 
 ### The speaking head
 
-Every language grows its own wireframe alien head, drawn like an oscilloscope trace: its own skull, eyes (one, a row, a spider cluster, a ring right round the head, or on stalks), nose, mouth, colours and extras such as antennae, horns, fins, mandibles or tentacles. You can see inside it: a brain (six kinds), nerves from every eye, teeth, tongue, bones, windpipes of different sizes, air sacs and a diaphragm that breathes. Each head has its own temperament and habits, so it blinks, glances, tilts, yawns or twitches in its own way, and it watches your pointer. Most are drawn with a loose, broken, glowing line, as if sketched by hand. It speaks whatever is playing. The jaw, lips and the glowing vocal tract inside it follow the sounds actually being made, with the current word and its meaning as a caption and live pitch and resonance read-outs. Drag to turn it, press **new head** for a different one, and **save video** to record it speaking with sound.
+Every language grows its own wireframe alien head, drawn like an oscilloscope trace: its own skull, eyes (one, a row, a spider cluster, a ring right round the head, or on stalks), nose, mouth, colours and extras such as antennae, horns, fins, mandibles or tentacles. You can see inside it: a brain (six kinds), nerves from every eye, teeth, tongue, bones, windpipes of different sizes, air sacs and a diaphragm that breathes. Each head has its own temperament and habits, so it blinks, glances, tilts, yawns or twitches in its own way, and it watches your pointer. Most are drawn with a loose, broken, glowing line, as if sketched by hand. It speaks whatever is playing. The jaw, lips and the glowing vocal tract inside it follow the sounds actually being made, with the current word and its meaning as a caption and live pitch and resonance read-outs. Drag to turn it, press **new creature** for a different head and voice, and **video** to record it speaking with sound.
 
 ### How many sounds does a language need?
 
@@ -51,10 +51,10 @@ npm test
 
 There are two kinds of neural voice, both running in the browser with [onnxruntime-web](https://onnxruntime.ai), in a background worker so the page stays responsive:
 
-- **natural** (female, male): [Piper](https://github.com/rhasspy/piper) voices `en_US-kristin` and `en_US-norman`, trained on public-domain recordings. About 63 MB each. Fast: a few seconds of work for a paragraph.
-- **natural+** (female, male): [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0) with the `af_heart` and `am_michael` voices. More lifelike. One 92 MB model shared by both voices, and slower: roughly 1.5–2× the length of the speech to make it, depending on your computer.
+- **Quick voices** ([Piper](https://github.com/rhasspy/piper), about 63 MB each, a few seconds of work for a paragraph): American woman and man (`en_US-kristin`, `en_US-norman`), Finnish man (`fi_FI-harri`), Hungarian woman (`hu_HU-anna`) and Vietnamese woman (`vi_VN-vais1000`).
+- **Lifelike voices**, marked + ([Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), Apache 2.0): American woman and man, Japanese woman, Mandarin man, Hindi woman and Italian man. One 92 MB model shared by all six, and slower: roughly 1.5–2× the length of the speech to make it, depending on your computer.
 
-They read your language's sounds directly, so they pronounce invented words as written, with a light English accent. Each downloads once from Hugging Face when you pick it, and then works offline from the browser cache. Pitch, speed, roughness, warble, many voices, metallic and space apply to it. Growl, breathiness, your recordings and audio-track conversion use the built-in voice.
+They read your language's sounds directly, so they pronounce invented words as written. A voice trained on Finnish or Vietnamese says the same sounds with a different mouth than one trained on English, which is what makes two languages sound unlike each other. Each downloads once from Hugging Face when you pick it, and then works offline from the browser cache. Pitch, speed, roughness, warble, many voices, metallic and space apply to them, and so does the language's accent. Growl, breathiness and your recordings use the built-in voice.
 
 ## Speech-to-text
 
@@ -70,8 +70,8 @@ Everything runs in the browser: synthesis (Web Audio API and onnxruntime-web), w
 - [onnxruntime-web](https://github.com/microsoft/onnxruntime) 1.20.1 (MIT), vendored in `vendor/ort/`
 - [Whisper](https://github.com/openai/whisper) tiny.en (Apache 2.0), via [onnx-community/whisper-tiny.en](https://huggingface.co/onnx-community/whisper-tiny.en)
 - [lamejs](https://github.com/zhuker/lamejs) 1.2.1 (LGPL-3.0), the .mp3 encoder, vendored unmodified as a separate file in `vendor/lame/` and loaded only when saving an .mp3
-- [Piper](https://github.com/rhasspy/piper) voices from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices): kristin and norman, trained on public-domain LibriVox recordings
-- [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0), via [onnx-community/Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX): voices af_heart and am_michael
+- [Piper](https://github.com/rhasspy/piper) voices from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices): kristin and norman (public-domain LibriVox recordings), harri and anna (CC0), and vais1000, trained on the [VAIS-1000 Vietnamese speech corpus](https://ieee-dataport.org/documents/vais-1000-vietnamese-speech-synthesis-corpus) (CC BY 4.0)
+- [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0), via [onnx-community/Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX): voices af_heart, am_michael, jf_alpha, zm_yunjian, hf_alpha and im_nicola
 - Fonts: IBM Plex Mono, Archivo and Charis SIL (SIL Open Font License), loaded from Google Fonts
 
 ## Licence

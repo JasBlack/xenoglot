@@ -33,65 +33,102 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="2.1.0">
+<body data-ui="dark" data-tool="xenoglot" data-version="2.2.0">
 <header class="topbar">
-  <div class="hl">
-    <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
-    <div class="status on-grid" aria-label="Status lights">
-      <span><i class="led" id="ledVoice"></i>voice</span>
-      <span><i class="led p" id="ledMine"></i>your voice</span>
-      <span><i class="led rec" id="ledRec"></i>rec</span>
-    </div>
-  </div>
-  <div class="transport">
-    <button type="button" class="key" id="tpSpeak" title="Speak the translation (Space)">&#x25B6; speak</button>
-    <button type="button" class="key primary" id="btnRandom" title="Invent a whole new language (N)">&#x2726; new language</button>
-    <button type="button" class="key ink" id="recTop" title="Record every sound in one take"><span class="dot"></span> record</button>
-  </div>
+  <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
+  <nav class="steps" aria-label="Sections">
+    <a href="#translate" data-v="translate"><b>speak</b></a>
+    <a href="#sounds" data-v="sounds"><b>voice</b></a>
+    <a href="#words" data-v="words"><b>words</b></a>
+    <a href="#audio" data-v="audio"><b>audio</b></a>
+    <a href="#script" data-v="script"><b>script</b></a>
+  </nav>
   <div class="hr">
-    <button type="button" class="key" id="btnSave" title="Save this language as a file">save &#x2193;</button>
-    <button type="button" class="key" id="btnLoad" title="Open a saved language file">open</button>
+    <button type="button" class="key" id="langToggle" aria-expanded="false" aria-controls="langMore" title="Your saved languages, sharing, files and examples">library</button>
     <button type="button" class="key icon" id="theme" title="Light / dark" aria-label="Switch light or dark">&#x25D0;</button>
   </div>
   <input id="fileLoad" type="file" accept=".json,application/json" hidden>
+  <div hidden><i class="led" id="ledVoice"></i><i class="led p" id="ledMine"></i><i class="led rec" id="ledRec"></i></div>
 </header>
 
 <main class="console">
-  <aside class="column">
-    <section class="panel langpanel">
-      <h2><span>language</span><span id="youL"></span></h2>
-      <div class="namerow"><input id="langName" type="text" aria-label="Language name" autocomplete="off" spellcheck="false"><button type="button" class="key" id="langToggle" aria-expanded="false" aria-controls="langMore" title="Your saved languages, sharing and examples">library</button></div>
-      <div class="langmore" id="langMore">
-      <div class="control"><label class="control-top" for="libSel"><span>my languages</span><em id="libCount"></em></label><select id="libSel" aria-label="My languages"></select></div>
-      <div class="kgrid"><button type="button" class="key" id="libDup" title="Make a copy to experiment on">duplicate</button><button type="button" class="key" id="libDel" title="Delete this language from this browser">delete</button></div>
-      <div class="kgrid3"><button type="button" class="key primary" id="btnShare" title="Copy a link that holds this whole language">share link</button><button type="button" class="key" data-proxy="btnSave" title="Save as a .json file, including your recorded voice">save &#x2193;</button><button type="button" class="key" data-proxy="btnLoad" title="Open a .json language file">open</button></div>
-      <input id="shareOut" type="text" readonly hidden aria-label="Share link">
-      <div id="exWrap" class="sub" hidden><span class="label">examples</span><div class="chips" id="exList"></div></div>
-      <p class="hint">languages save in this browser as you work. share link or save &#x2193; to move one elsewhere. drop a .json anywhere to open it.</p>
-      </div>
-    </section>
-    <nav class="steps" aria-label="Steps">
-      <a href="#sounds" data-v="sounds"><i>1</i><b>sounds</b><small>pick and voice them</small><span class="led" data-led="sounds"></span></a>
-      <a href="#words" data-v="words"><i>2</i><b>words</b><small>shape and grammar</small><span class="led" data-led="words"></span></a>
-      <a href="#translate" data-v="translate"><i>3</i><b>translate</b><small>type english</small><span class="led" data-led="translate"></span></a>
-      <a href="#audio" data-v="audio"><i>4</i><b>audio</b><small>re-voice a track</small><span class="led" data-led="audio"></span></a>
-      <a href="#script" data-v="script"><i>5</i><b>script</b><small>alphabet and font</small><span class="led" data-led="script"></span></a>
-    </nav>
-    <p class="hint on-grid lg-only" style="padding:4px 6px">everything runs in your browser. nothing is uploaded.</p>
+  <aside class="headcol" aria-label="The speaker">
+    <div class="monitor"><canvas id="headCanvas" aria-label="A wireframe alien head that speaks the language"></canvas></div>
+    <input id="langName" type="text" aria-label="Language name" autocomplete="off" spellcheck="false" title="The language's name. Type to rename it.">
+    <button type="button" class="key primary tall wide" id="tSpeak" title="Speak the English in this language (Space)">&#x25B6; speak</button>
+    <div class="headkeys">
+      <button type="button" class="key" id="btnRandom" title="Invent a new language for this creature: new sounds, words, accent and script (N)">&#x2726; new language</button>
+      <button type="button" class="key" id="headNew" title="A different head and voice, speaking the same language">&#x2726; new creature</button>
+      <button type="button" class="key ink" id="headVideo" title="Record the head speaking, with sound, as a video file"><span class="dot"></span> video</button>
+    </div>
+    <button type="button" class="key primary wide" id="headShare" hidden title="Send the video with WhatsApp, messages or any app">share video</button>
+    <div class="lcd" id="headStatus"></div>
+    <div class="lcd lg-only"><span id="statusLine">ready</span></div>
+    <p class="hint on-grid lg-only" style="padding:4px 6px">drag the head to turn it. <kbd>Space</kbd>speak <kbd>N</kbd>new language. everything runs in your browser.</p>
   </aside>
 
   <section class="centre">
-<section class="view" id="v-sounds">
+    <section class="panel langpanel" id="langMore">
+      <h2><span>library</span><span id="libCount"></span></h2>
+      <div class="control"><label class="control-top" for="libSel"><span>my languages</span></label><select id="libSel" aria-label="My languages"></select></div>
+      <div class="kgrid"><button type="button" class="key" id="libDup" title="Make a copy to experiment on">duplicate</button><button type="button" class="key" id="libDel" title="Delete this language from this browser">delete</button></div>
+      <div class="kgrid3"><button type="button" class="key primary" id="btnShare" title="Copy a link that holds this whole language">share link</button><button type="button" class="key" id="btnSave" title="Save as a .json file, including your recorded voice">save file</button><button type="button" class="key" id="btnLoad" title="Open a .json language file">open file</button></div>
+      <input id="shareOut" type="text" readonly hidden aria-label="Share link">
+      <div id="exWrap" class="sub" hidden><span class="label">examples</span><div class="chips" id="exList"></div></div>
+      <p class="hint">languages save in this browser as you work. a share link or a file moves one elsewhere. drop a .json anywhere to open it.</p>
+    </section>
+
+<!-- SPEAK -->
+<section class="view" id="v-translate" hidden>
+<div class="panel intro" id="intro" hidden>
+  <h2><span>welcome</span></h2>
+  <p class="lede">Xenoglot invents spoken alien languages. Type English, press <b>speak</b>, and the creature says it in its own language. <b>&#x2726; new language</b> gives it a different one.</p>
+  <div class="btnrow"><button type="button" class="key primary" id="introSpeak">&#x25B6; hear it speak</button><button type="button" class="key" id="introClose">got it</button></div>
+</div>
   <div class="panel">
-    <h2><span><i>1</i>voice</span><span>tap a preset to hear it</span></h2>
-    <div class="label">engine</div>
-    <div class="chips" id="vEngine" role="group" aria-label="Voice engine"></div>
-    <p class="hint">built-in is a synthesizer: instant, every slider works, and it uses your recordings. natural is a neural voice (Piper, 63 MB) and natural+ a more lifelike one (Kokoro, 92 MB, shared by both its voices). Both read your language's sounds with a light English accent, download once, then work offline. Growl and breathiness only change the built-in voice.</p>
+    <h2><span>english</span><span>type what it should say</span></h2>
+    <textarea id="enText" aria-label="English text"></textarea>
+    <div class="lcd" id="tEst"></div>
+    <details class="more" id="tOpts"><summary>options</summary>
+      <div class="sub" style="gap:10px">
+        <div class="fitrow">
+          <div class="chips"><label class="chip lp"><input id="fitOn" type="checkbox">fit to a length</label></div>
+          <div class="control" id="fitCtl" hidden><label class="control-top" for="fitSecs"><span>length</span><em id="oFit"></em></label><input id="fitSecs" type="range" min="1" max="60" step="0.5" value="10"></div>
+        </div>
+        <p class="hint" id="fitHint" hidden>the voice speeds up or slows down to fit, between half and double speed.</p>
+        <div class="chips">
+          <label class="chip lp"><input id="keepNames" type="checkbox">keep names in english</label>
+          <label class="chip lp"><input type="radio" name="dir" value="ltr" checked>left to right</label>
+          <label class="chip lp"><input type="radio" name="dir" value="rtl">right to left</label>
+        </div>
+      </div>
+    </details>
+  </div>
+  <div class="panel">
+    <h2><span>in its language</span><span>hover a word for the english</span></h2>
+    <div class="well transport-well"><canvas class="wave" id="waveT" height="108"></canvas></div>
+    <div class="roman" id="outRoman"></div>
+    <div class="script well" id="outScript"></div>
+    <div class="ipaline" id="outIpa"></div>
+    <div class="btnrow"><button type="button" class="key primary" id="tShare" hidden title="Send it with WhatsApp, messages or any app">share</button><button type="button" class="key ink" id="tSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save audio (.mp3)</button></div>
+    <details class="more" id="tMore"><summary>more ways to save</summary>
+      <div class="btnrow"><button type="button" class="key" id="tSaveAudio" title="Full quality, for editing">save .wav</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
+    </details>
+    <div class="lcd" id="tStatus"></div>
+  </div>
+</section>
+
+<!-- VOICE AND SOUNDS -->
+<section class="view" id="v-sounds" hidden>
+  <div class="panel">
+    <h2><span>voice</span><span>who is speaking</span></h2>
+    <div class="chips" id="vEngine" role="group" aria-label="Voice"></div>
+    <p class="hint"><b>built-in</b> is instant and the most alien. The others are real recorded voices, each from a different language, so each gives your language a different mouth. They download once (63 MB each; the ones marked + share one 92 MB download, sound the most lifelike and take longer to speak).</p>
     <div class="lcd" id="engineStatus"></div>
     <div class="label">character</div>
-    <div class="chips" id="vPreset" role="group" aria-label="Voice presets"></div>
+    <div class="chips" id="vPreset" role="group" aria-label="Voice character"></div>
     <div class="btnrow"><button type="button" class="key" id="vTry"><span aria-hidden="true">&#x25B6;</span> hear a sample</button></div>
-    <details class="more adv"><summary>fine-tune the voice</summary>
+    <details class="more"><summary>fine-tune the voice</summary>
       <div class="controls">
         <div class="control"><label class="control-top" for="vPitch"><span>pitch</span><em id="oPitch"></em></label><input id="vPitch" type="range" min="45" max="400" step="1"></div>
         <div class="control"><label class="control-top" for="vSpeed"><span>speed</span><em id="oSpeed"></em></label><input id="vSpeed" type="range" min="0.5" max="1.8" step="0.05"></div>
@@ -108,21 +145,26 @@
   </div>
 
   <div class="panel">
-    <h2><span><i>2</i>sound inventory</span><span>tap to add or remove</span></h2>
-    <p class="hint">Green = in your language. The big letter is how it’s written, and the key it sits on in your font. ▶ plays it, <b>rec</b> and <b>file</b> replace it with your own voice.</p>
-    <div id="palette" class="sub" style="gap:14px"></div>
+    <h2><span>accent</span><span>how the language is spoken</span></h2>
+    <div class="lcd block" id="accentInfo"></div>
+    <div class="btnrow"><button type="button" class="key" id="accentNew" title="Keep the sounds and words, change the rhythm and melody">&#x2726; new accent</button></div>
   </div>
 
   <div class="panel">
-    <h2><span><i>3</i>your own voice</span><span>optional</span></h2>
-    <p class="hint">Say every sound below in order, with about half a second of silence between each. Xenoglot cuts the take into single sounds. If your browser blocks the microphone here, record on your phone and use <b>upload a take</b>.</p>
+    <h2><span>sounds</span><span>tap to add or remove</span></h2>
+    <p class="hint">Green = in the language. &#x25B6; plays a sound. <b>rec</b> and <b>file</b> replace it with your own voice (built-in voice only).</p>
+    <div id="palette" class="sub" style="gap:14px"></div>
+    <div class="lcd block" id="calc"></div>
+  </div>
+
+  <details class="panel fold"><summary>record your own voice for every sound</summary>
+    <p class="hint">Say every sound below in order, with about half a second of silence between each. Xenoglot cuts the take into single sounds. If the microphone is blocked, record on your phone and use <b>upload a take</b>.</p>
     <div class="lenkey"><span><i class="len hold" style="display:inline-block;width:14px;height:3px;border-radius:2px;background:var(--accent2)"></i>hold it, about half a second</span><span><i style="display:inline-block;width:3px;height:3px;border-radius:50%;background:var(--accent2)"></i>keep it short, no vowel after</span></div>
     <div class="takeorder" id="takeOrder"></div>
     <div class="kgrid"><button type="button" class="key ink" id="takeRec"><span class="dot"></span> record a take</button><button type="button" class="key" id="takeBtn">upload a take</button></div>
     <div class="lcd" id="takeStatus"></div>
-  </div>
-  <div class="panel">
-    <h2><span><i>4</i>how many sounds?</span><span>english uses 44</span></h2>
+  </details>
+  <details class="panel fold"><summary>how many sounds does a language need?</summary>
     <p class="lede">Each distinct sound is a <b>phoneme</b>. English has about 24 consonants and 20 vowel sounds. The smallest known language, Rotokas, works with 11. Most use 20 to 40. Fewer sounds just means longer words.</p>
     <div class="stats">
       <div class="stat"><div class="n">44</div><div class="l">english</div></div>
@@ -130,117 +172,74 @@
       <div class="stat"><div class="n">20–40</div><div class="l">typical</div></div>
       <div class="stat you"><div class="n" id="youN">0</div><div class="l">yours</div></div>
     </div>
-    <div class="lcd block" id="calc"></div>
     <details class="more"><summary>the 44 sounds of english</summary><div class="e44" id="e44"></div></details>
-  </div>
-
-  <div class="nextrow"><a class="key primary tall" href="#words">next: words <span aria-hidden="true">&rsaquo;</span></a></div>
+  </details>
   <input id="fileRec" type="file" accept="audio/*,video/*" hidden>
   <input id="fileTake" type="file" accept="audio/*,video/*" hidden>
 </section>
 
-<!-- 2 WORDS -->
+<!-- WORDS -->
 <section class="view" id="v-words" hidden>
   <div class="panel">
-    <h2><span><i>1</i>word shape</span><span>how syllables are built</span></h2>
-    <p class="lede">Every English word gets a permanent new word made from your sounds. Grammar stays English: same word order, and endings like plural, past tense and <i>-ing</i> become fixed endings.</p>
-    <div class="controls adv">
+    <h2><span>dictionary</span><span>type over any word</span></h2>
+    <p class="hint">Every English word gets a permanent new word made from the language's sounds. Grammar stays English: same word order.</p>
+    <div class="btnrow"><input id="lexFilter" type="text" placeholder="find or add an english word" style="flex:1 1 200px;width:auto" autocomplete="off"><button type="button" class="key" id="lexAdd">add</button><button type="button" class="key" id="lexReset">undo my edits</button></div>
+    <div class="lex" id="lex"></div>
+  </div>
+  <div class="panel">
+    <h2><span>grammar endings</span><span>added to the word</span></h2>
+    <div class="affix" id="affixes"></div>
+  </div>
+  <div class="panel">
+    <h2><span>word shape</span><span>how syllables are built</span></h2>
+    <div class="controls">
       <div class="control"><label class="control-top" for="wOnset"><span>start syllables with a consonant</span><em id="oOnset"></em></label><input id="wOnset" type="range" min="0" max="1" step="0.05"></div>
       <div class="control"><label class="control-top" for="wCoda"><span>end syllables with a consonant</span><em id="oCoda"></em></label><input id="wCoda" type="range" min="0" max="1" step="0.05"></div>
       <div class="control"><label class="control-top" for="wCluster"><span>clusters like tr-, pl-</span><em id="oCluster"></em></label><input id="wCluster" type="range" min="0" max="0.6" step="0.05"></div>
       <div class="control"><label class="control-top" for="wMax"><span>longest word (syllables)</span><em id="oMax"></em></label><input id="wMax" type="range" min="1" max="6" step="1"></div>
     </div>
-    <div class="lcd block adv" id="calc2"></div>
+    <div class="lcd block" id="calc2"></div>
   </div>
-  <div class="panel">
-    <h2><span><i>2</i>grammar endings</span><span>added to the word</span></h2>
-    <div class="affix" id="affixes"></div>
-  </div>
-  <div class="panel">
-    <h2><span><i>3</i>dictionary</span><span>type over any word</span></h2>
-    <div class="btnrow"><input id="lexFilter" type="text" placeholder="find or add an english word" style="flex:1 1 200px;width:auto" autocomplete="off"><button type="button" class="key" id="lexAdd">add</button><button type="button" class="key" id="lexReset">undo my edits &rsaquo;</button></div>
-    <div class="lex" id="lex"></div>
-  </div>
-  <div class="nextrow"><a class="key primary tall" href="#translate">next: translate <span aria-hidden="true">&rsaquo;</span></a></div>
 </section>
 
-<!-- 3 TRANSLATE -->
-<section class="view" id="v-translate" hidden>
-<div class="panel intro" id="intro" hidden>
-  <h2><span>welcome</span><span>the short version</span></h2>
-  <p class="lede">Xenoglot invents a spoken language. One called <b>Velnari</b> is loaded to start with: type some English below and press <b>speak</b> to hear it, or make a different language with <b>&#x2726; new language</b>. The five steps let you pick its sounds and voice, shape its words, turn a recording into it, and design its alphabet and font.</p>
-  <div class="btnrow"><button type="button" class="key primary" id="introSpeak">&#x25B6; hear it speak</button><button type="button" class="key" id="introNew">&#x2726; make a new language</button><button type="button" class="key" id="introClose">got it</button></div>
-</div>
-  <div class="panel">
-    <h2><span><i>1</i>english in</span><span id="tName"></span></h2>
-    <textarea id="enText" aria-label="English text"></textarea>
-    <div class="lcd" id="tEst"></div>
-    <div class="fitrow">
-      <div class="chips"><label class="chip lp"><input id="fitOn" type="checkbox">fit to a length</label></div>
-      <div class="control" id="fitCtl" hidden><label class="control-top" for="fitSecs"><span>length</span><em id="oFit"></em></label><input id="fitSecs" type="range" min="1" max="60" step="0.5" value="10"></div>
-    </div>
-    <p class="hint" id="fitHint" hidden>the voice speeds up or slows down to fit, between half and double speed so it still sounds natural.</p>
-    <div class="chips">
-      <label class="chip lp"><input id="keepNames" type="checkbox">keep names in english</label>
-      <label class="chip lp"><input type="radio" name="dir" value="ltr" checked>left to right</label>
-      <label class="chip lp"><input type="radio" name="dir" value="rtl">right to left</label>
-    </div>
-  </div>
-  <div class="panel">
-    <h2><span><i>2</i>your language out</span><span>hover a word for the english</span></h2>
-    <div class="well transport-well">
-      <button type="button" class="roundkey" id="tSpeak" aria-label="Speak it" title="Speak it"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
-      <canvas class="wave" id="waveT" height="108"></canvas>
-      <button type="button" class="stopkey" id="tStop" aria-label="Stop" title="Stop">&#x25A0;</button>
-    </div>
-    <div class="outblock"><div class="label">written</div><div class="roman" id="outRoman"></div></div>
-    <div class="outblock"><div class="label">in your script</div><div class="script well" id="outScript"></div></div>
-    <div class="outblock"><div class="label">pronunciation (ipa)</div><div class="ipaline" id="outIpa"></div></div>
-    <div class="btnrow"><button type="button" class="key primary" id="tShare" hidden title="Send it with WhatsApp, messages or any app">share</button><button type="button" class="key ink" id="tSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="tSaveAudio" title="Full quality, for editing">save .wav</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
-    <div class="lcd" id="tStatus"></div>
-  </div>
-  <div class="nextrow"><a class="key primary tall" href="#audio">next: audio <span aria-hidden="true">&rsaquo;</span></a></div>
-</section>
-
-<!-- 4 AUDIO -->
+<!-- AUDIO -->
 <section class="view" id="v-audio" hidden>
   <div class="panel">
-    <h2><span><i>1</i>drop a track</span><span>english speech</span></h2>
-    <p class="hint">Drop in a recording of English speech. Xenoglot works out what is said and when, then speaks it again in your language with the same timing.</p>
+    <h2><span>re-voice a recording</span><span>english speech in</span></h2>
+    <p class="hint">Add a recording of English speech. Xenoglot writes down what is said and when, then speaks it again in the language with the same timing.</p>
     <button type="button" class="dropzone" id="drop"><span class="led" id="dropLed"></span><span>add an audio file</span><small>mp3 &middot; wav &middot; m4a &middot; webm &middot; up to 10 min</small></button>
     <input id="fileTrack" type="file" accept="audio/*,video/*" hidden>
     <div class="lcd" id="dInfo"></div>
-  </div>
-  <div class="panel">
-    <h2><span><i>2</i>what is said</span><span>worked out for you</span></h2>
-    <p class="hint">Xenoglot can listen to the track and write down the English, one phrase per line, each with its timing. Edit the words if you like: keep the lines and every phrase lands exactly where the original was spoken. Or paste your own words.</p>
-    <div class="btnrow"><button type="button" class="key" id="dTranscribe" disabled title="Speech-to-text runs in your browser (Whisper). A 40 MB download the first time.">write it down for me</button>
-      <div class="chips"><label class="chip lp" title="When the box is empty, convert listens first"><input id="dAuto" type="checkbox" checked>work out the words when i convert</label></div></div>
-    <div class="lcd" id="dAsr"></div>
-    <textarea id="dTranscript" placeholder="the english words spoken in the track, one phrase per line"></textarea>
-    <p class="hint">speech-to-text is a 40 MB download the first time. the new track is spoken by the voice chosen in step 1. leave the box empty and untick the option for speech that only follows the rhythm.</p>
-    <div class="control"><label class="control-top" for="dOrig"><span>original underneath</span><em id="oOrig">0%</em></label><input id="dOrig" type="range" min="0" max="0.6" step="0.02" value="0"></div>
     <button type="button" class="key primary tall wide" id="dGo" disabled><span aria-hidden="true">&#x25B6;</span> convert</button>
+    <details class="more"><summary>the words, and options</summary>
+      <div class="sub" style="gap:10px">
+        <p class="hint">Xenoglot listens to the track itself (a 40 MB download the first time). To check or change the words first, press <b>write it down for me</b> and edit: one phrase per line.</p>
+        <div class="btnrow"><button type="button" class="key" id="dTranscribe" disabled title="Speech-to-text runs in your browser (Whisper). A 40 MB download the first time.">write it down for me</button>
+          <div class="chips"><label class="chip lp" title="When the box is empty, convert listens first"><input id="dAuto" type="checkbox" checked>work out the words when i convert</label></div></div>
+        <div class="lcd" id="dAsr"></div>
+        <textarea id="dTranscript" placeholder="the english words spoken in the track, one phrase per line"></textarea>
+        <div class="control"><label class="control-top" for="dOrig"><span>original underneath</span><em id="oOrig">0%</em></label><input id="dOrig" type="range" min="0" max="0.6" step="0.02" value="0"></div>
+      </div>
+    </details>
   </div>
   <div class="panel" id="dOut" hidden>
-    <h2><span><i>3</i>new track</span><span>same timing</span></h2>
+    <h2><span>new track</span><span>same timing</span></h2>
     <div class="well transport-well">
       <button type="button" class="roundkey" id="dPlay" aria-label="Play" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
       <canvas class="wave" id="waveD" height="108"></canvas>
       <button type="button" class="stopkey" id="dStop" aria-label="Stop" title="Stop">&#x25A0;</button>
     </div>
     <div class="roman" id="dRoman" style="font-size:17px"></div>
-    <div class="btnrow"><button type="button" class="key primary" id="dShare" hidden title="Send it with WhatsApp, messages or any app">share</button><button type="button" class="key ink" id="dSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="dSave" title="Full quality, for editing">save .wav</button></div>
+    <div class="btnrow"><button type="button" class="key primary" id="dShare" hidden title="Send it with WhatsApp, messages or any app">share</button><button type="button" class="key ink" id="dSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save audio (.mp3)</button><button type="button" class="key" id="dSave" title="Full quality, for editing">save .wav</button></div>
     <div class="lcd" id="dStatus"></div>
   </div>
-  <div class="nextrow"><a class="key primary tall" href="#script">next: script <span aria-hidden="true">&rsaquo;</span></a></div>
 </section>
 
-<!-- 5 SCRIPT -->
+<!-- SCRIPT -->
 <section class="view" id="v-script" hidden>
   <div class="panel">
-    <h2><span><i>1</i>alphabet</span><span class="gid" id="gId"></span></h2>
-    <div class="kgrid"><button type="button" class="key primary tall" id="gRegenAll">&#x2726; new alphabet</button><button type="button" class="key" id="gSurprise">surprise me</button></div>
+    <h2><span>alphabet</span><span class="gid" id="gId"></span></h2>
+    <div class="kgrid"><button type="button" class="key primary tall" id="gRegenAll">&#x2726; new alphabet</button><button type="button" class="key tall" id="gSurprise">new style too</button></div>
     <div class="glyphs" id="glyphs"></div>
     <details class="more"><summary>style, pen and weirdness</summary>
       <div class="sub" style="gap:12px">
@@ -257,21 +256,20 @@
       </div>
     </details>
   </div>
-  <div class="panel">
-    <h2><span><i>2</i>draw a letter</span><span>pick one above</span></h2>
+  <details class="panel fold"><summary>draw a letter yourself</summary>
     <div class="editor">
       <canvas id="gCanvas" width="480" height="480" aria-label="Letter drawing area"></canvas>
       <div class="side">
         <div><span class="bigkey" id="eKey"></span> <span class="hint" id="eIpa"></span></div>
-        <p class="hint">Drag to draw. Snap joins strokes to the grid for a clean, consistent look.</p>
+        <p class="hint">Pick a letter above, then drag to draw.</p>
         <div class="chips"><label class="chip lp"><input id="snap" type="checkbox" checked>snap to grid</label></div>
         <div class="kgrid"><button type="button" class="key" id="eUndo">undo stroke</button><button type="button" class="key" id="eClear">clear</button><button type="button" class="key" id="eRegen">new random</button><button type="button" class="key" id="ePlay">&#x25B6; hear it</button></div>
       </div>
     </div>
-  </div>
+  </details>
   <div class="panel">
-    <h2><span><i>3</i>font</span><span>type it anywhere</span></h2>
-    <p class="hint">Each letter sits on the key shown in the written text, so typing that text in this font shows your script.</p>
+    <h2><span>font</span><span>type it anywhere</span></h2>
+    <p class="hint">Each letter sits on the key shown in the written text, so typing that text in this font shows the script.</p>
     <input id="fontName" type="text" aria-label="Font name" autocomplete="off">
     <div class="kgrid"><button type="button" class="key ink" id="fSave">save font (.ttf)</button><button type="button" class="key" id="fChart">save chart (.svg)</button></div>
     <label class="label" for="fPrev">try it</label>
@@ -279,17 +277,7 @@
     <div class="lcd" id="fStatus"></div>
   </div>
 </section>
-    <div class="lcd"><span id="statusLine">ready</span><span>local processing</span></div>
-    <footer class="keys"><span class="on-grid"><kbd>Space</kbd>speak / stop <kbd>N</kbd>new language <kbd>1</kbd>–<kbd>5</kbd>steps</span><span class="on-grid">right-click a slider resets it</span></footer>
   </section>
-
-  <aside class="headcol" aria-label="Speaking head">
-    <div class="monitor"><canvas id="headCanvas" aria-label="A wireframe alien head that speaks the language"></canvas></div>
-    <div class="kgrid"><button type="button" class="key" id="headNew" title="Grow a different head for this language">&#x2726; new head</button><button type="button" class="key ink" id="headVideo" title="Record the head speaking, with sound, as a video file"><span class="dot"></span> save video</button></div>
-    <button type="button" class="key primary wide" id="headShare" hidden title="Send the video with WhatsApp, messages or any app">share video</button>
-    <div class="lcd" id="headStatus"></div>
-    <p class="hint on-grid" style="padding:4px 6px">drag to turn it. it speaks whatever is playing. every language grows its own head.</p>
-  </aside>
 </main>
 <div id="toast" role="status"></div>
 
