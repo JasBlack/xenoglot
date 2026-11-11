@@ -1,9 +1,9 @@
 {
   "name": "xenoglot",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Build a new spoken language on English grammar, in the browser.",
   "license": "MIT",
-  "scripts": { "test": "node tests/smoke.mjs" },
+  "scripts": { "test": "node tests/smoke.mjs", "test:models": "node tests/models.mjs" },
   "devDependencies": { "playwright": "^1.48.0" }
 }

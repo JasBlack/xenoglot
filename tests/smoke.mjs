@@ -28,6 +28,9 @@ try {
   const p = await page({ viewport: { width: 1280, height: 900 } });
   await p.goto(URL0); await p.waitForTimeout(800);
   check((await p.title()) === 'Xenoglot - JAS.BLACK', 'tab title');
+  check(await p.isVisible('#v-translate') && await p.isVisible('#intro'), 'a first visit opens on translate with the welcome');
+  await p.click('#introClose'); await p.reload(); await p.waitForTimeout(600);
+  check(!(await p.isVisible('#intro')), 'the welcome stays closed once dismissed');
   for (const v of ['sounds', 'words', 'translate', 'audio', 'script']) {
     await p.goto(URL0 + '#' + v); await p.waitForTimeout(300);
     const shown = await p.evaluate(() => ['sounds','words','translate','audio','script'].filter(x => document.getElementById('v-' + x).getBoundingClientRect().height > 0));
@@ -35,6 +38,10 @@ try {
   }
   await p.goto(URL0 + '#translate'); await p.waitForTimeout(500);
   check((await p.textContent('#outRoman')).trim().length > 10, 'translation produces words');
+  const typed = await p.inputValue('#enText');
+  await p.fill('#enText', 'I have 42 ships'); await p.dispatchEvent('#enText', 'input');
+  check((await p.$$eval('#outRoman .w', w => w.map(x => x.title).join(' '))) === 'I have forty two ships', 'numbers are spoken as words');
+  await p.fill('#enText', typed); await p.dispatchEvent('#enText', 'input');
   await p.click('#tSpeak');
   await p.waitForFunction(() => /s of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
   check(true, 'speech renders');
@@ -74,9 +81,21 @@ try {
   const [font] = await Promise.all([p.waitForEvent('download'), p.click('#fSave')]);
   const otf = await readFile(await font.path());
   check(font.suggestedFilename().endsWith('.otf') && otf.subarray(0, 4).toString('latin1') === 'OTTO', 'font saves as an OpenType .otf file');
+  // the speaking head
+  await p.goto(URL0 + '#translate'); await p.waitForTimeout(700);
+  const lit = () => p.evaluate(() => { const c = document.querySelector('#headCanvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 16) if (d[i] + d[i + 1] + d[i + 2] > 120) n++; return n; });
+  check((await lit()) > 300, 'the head is drawn on the monitor');
+  const seedA = await p.getAttribute('#headCanvas', 'data-seed'); await p.click('#headNew'); await p.waitForTimeout(200);
+  check(seedA && (await p.getAttribute('#headCanvas', 'data-seed')) !== seedA, 'new head grows a different head');
+  await p.fill('#enText', 'Hello traveler.'); await p.dispatchEvent('#enText', 'input');
+  const [video] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.click('#headVideo')]);
+  const vid = await readFile(await video.path()), webm = vid.readUInt32BE(0) === 0x1a45dfa3, mp4 = vid.subarray(4, 8).toString('latin1') === 'ftyp';
+  check(/\.(mp4|webm)$/.test(video.suggestedFilename()) && (webm || mp4) && vid.length > 30000, 'the head speaking saves as a video file');
   const m = await page({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await m.goto(URL0 + '#translate'); await m.waitForTimeout(600);
   check((await m.evaluate(() => document.documentElement.scrollWidth)) <= 390, 'no sideways scroll on a phone');
+  const folded = !(await m.isVisible('#libSel')); await m.tap('#langToggle');
+  check(folded && await m.isVisible('#libSel'), 'on a phone the library is folded until asked for');
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 } finally { await browser.close(); server.close(); }
 process.exit(failed ? 1 : 0);

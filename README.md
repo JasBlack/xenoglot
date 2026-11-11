@@ -9,8 +9,12 @@ Build a new spoken language on top of English grammar, entirely in your browser.
 1. **Sounds**: choose your language's sounds from 37 (vowels, stops, hisses, clicks, rolled r…) and give them a voice. Pick the **built-in** synthesizer or a **natural** neural voice (female or male), then a character: ten presets go from a plain voice to a giant, a whispering spirit or a hive choir. You can replace any sound with your own voice, and each sound tells you how to record it.
 2. **Words**: every English word gets a permanent new word built from your sounds. Grammar stays English: same word order, and plural, past tense, *-ing*, possessive, *n't* and *-ly* become fixed endings. Edit any word in the dictionary.
 3. **Translate**: type English and get the new language written in Latin letters, in its own script and as pronunciation (IPA). As you type it shows how long the speech will be and how long it takes to make. Turn on **fit to a length** to pick an exact length: the voice speeds up or slows down to match, within half to double speed. Hear it and save the audio as an **.mp3 for sharing** (small, plays in WhatsApp, messages and on any phone) or a full-quality **.wav** for editing.
-4. **Audio**: drop in a recording of English speech. Xenoglot reads its phrases, rhythm and melody and re-voices it in your language with the same timing. Paste the words spoken for a true translation.
+4. **Audio**: drop in a recording of English speech. Xenoglot listens to it and writes down what is said, phrase by phrase with timings (speech-to-text runs in your browser), then speaks it again in your language, each phrase landing where the original was. You can edit the words first, and the new track uses whichever voice you chose.
 5. **Script**: generate an alphabet (14 styles, 4 pens, weirdness and slant), redraw any letter by hand, and download it as an installable font (.otf, with capitals and basic punctuation) or an alphabet chart (.svg).
+
+### The speaking head
+
+Every language grows its own wireframe alien head, drawn like an oscilloscope trace: its own skull, eyes (one, a row, a spider cluster, a ring right round the head, or on stalks), nose, mouth, colours and extras such as antennae, horns, fins, mandibles or tentacles. It speaks whatever is playing. The jaw, lips and the glowing vocal tract inside it follow the sounds actually being made, with the current word and its meaning as a caption and live pitch and resonance read-outs. Drag to turn it, press **new head** for a different one, and **save video** to record it speaking with sound.
 
 ### How many sounds does a language need?
 
@@ -41,6 +45,8 @@ npx playwright install chromium
 npm test
 ```
 
+`npm test` runs offline. `npm run test:models` also checks speech-to-text, the natural voices and audio conversion with the real models, and downloads about 200 MB from Hugging Face the first time.
+
 ## The natural voice
 
 There are two kinds of neural voice, both running in the browser with [onnxruntime-web](https://onnxruntime.ai), in a background worker so the page stays responsive:
@@ -50,14 +56,19 @@ There are two kinds of neural voice, both running in the browser with [onnxrunti
 
 They read your language's sounds directly, so they pronounce invented words as written, with a light English accent. Each downloads once from Hugging Face when you pick it, and then works offline from the browser cache. Pitch, speed, roughness, warble, many voices, metallic and space apply to it. Growl, breathiness, your recordings and audio-track conversion use the built-in voice.
 
+## Speech-to-text
+
+The audio step uses [Whisper](https://github.com/openai/whisper) tiny.en (Apache 2.0 weights from [onnx-community/whisper-tiny.en](https://huggingface.co/onnx-community/whisper-tiny.en)) in a background worker, on the same onnxruntime-web as the voices. It is a 40 MB download the first time you use it, then it works offline. It is English-only, which is all Xenoglot needs: the words become your language anyway, so timing matters more than perfect spelling.
+
 ## Privacy
 
-Everything runs in the browser: synthesis (Web Audio API and onnxruntime-web), word generation, audio analysis and font building (opentype.js). No uploads, no accounts, no tracking. The only outside request is the natural voice download from Hugging Face, and only if you choose that voice. The microphone is used only while you record, and only after you allow it.
+Everything runs in the browser: synthesis (Web Audio API and onnxruntime-web), word generation, audio analysis and font building (opentype.js). No uploads, no accounts, no tracking. The only outside requests are model downloads from Hugging Face (a natural voice, or speech-to-text), and only if you use them. Your audio is never uploaded. The microphone is used only while you record, and only after you allow it.
 
 ## Credits
 
 - [opentype.js](https://github.com/opentypejs/opentype.js) (MIT), vendored in `vendor/`
 - [onnxruntime-web](https://github.com/microsoft/onnxruntime) 1.20.1 (MIT), vendored in `vendor/ort/`
+- [Whisper](https://github.com/openai/whisper) tiny.en (Apache 2.0), via [onnx-community/whisper-tiny.en](https://huggingface.co/onnx-community/whisper-tiny.en)
 - [lamejs](https://github.com/zhuker/lamejs) 1.2.1 (LGPL-3.0), the .mp3 encoder, vendored unmodified as a separate file in `vendor/lame/` and loaded only when saving an .mp3
 - [Piper](https://github.com/rhasspy/piper) voices from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices): kristin and norman, trained on public-domain LibriVox recordings
 - [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0), via [onnx-community/Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX): voices af_heart and am_michael

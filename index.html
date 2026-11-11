@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="1.6.0">
+<body data-ui="dark" data-tool="xenoglot" data-version="2.0.0">
 <header class="topbar">
   <div class="hl">
     <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
@@ -60,13 +60,15 @@
   <aside class="column">
     <section class="panel langpanel">
       <h2><span>language</span><span id="youL"></span></h2>
-      <input id="langName" type="text" aria-label="Language name" autocomplete="off" spellcheck="false">
+      <div class="namerow"><input id="langName" type="text" aria-label="Language name" autocomplete="off" spellcheck="false"><button type="button" class="key" id="langToggle" aria-expanded="false" aria-controls="langMore" title="Your saved languages, sharing and examples">library</button></div>
+      <div class="langmore" id="langMore">
       <div class="control"><label class="control-top" for="libSel"><span>my languages</span><em id="libCount"></em></label><select id="libSel" aria-label="My languages"></select></div>
       <div class="kgrid"><button type="button" class="key" id="libDup" title="Make a copy to experiment on">duplicate</button><button type="button" class="key" id="libDel" title="Delete this language from this browser">delete</button></div>
       <div class="kgrid3"><button type="button" class="key primary" id="btnShare" title="Copy a link that holds this whole language">share link</button><button type="button" class="key" data-proxy="btnSave" title="Save as a .json file, including your recorded voice">save &#x2193;</button><button type="button" class="key" data-proxy="btnLoad" title="Open a .json language file">open</button></div>
       <input id="shareOut" type="text" readonly hidden aria-label="Share link">
       <div id="exWrap" class="sub" hidden><span class="label">examples</span><div class="chips" id="exList"></div></div>
       <p class="hint">languages save in this browser as you work. share link or save &#x2193; to move one elsewhere. drop a .json anywhere to open it.</p>
+      </div>
     </section>
     <nav class="steps" aria-label="Steps">
       <a href="#sounds" data-v="sounds"><i>1</i><b>sounds</b><small>pick and voice them</small><span class="led" data-led="sounds"></span></a>
@@ -164,6 +166,11 @@
 
 <!-- 3 TRANSLATE -->
 <section class="view" id="v-translate" hidden>
+<div class="panel intro" id="intro" hidden>
+  <h2><span>welcome</span><span>the short version</span></h2>
+  <p class="lede">Xenoglot invents a spoken language. One called <b>Velnari</b> is loaded to start with: type some English below and press <b>speak</b> to hear it, or make a different language with <b>&#x2726; new language</b>. The five steps let you pick its sounds and voice, shape its words, turn a recording into it, and design its alphabet and font.</p>
+  <div class="btnrow"><button type="button" class="key primary" id="introSpeak">&#x25B6; hear it speak</button><button type="button" class="key" id="introNew">&#x2726; make a new language</button><button type="button" class="key" id="introClose">got it</button></div>
+</div>
   <div class="panel">
     <h2><span><i>1</i>english in</span><span id="tName"></span></h2>
     <textarea id="enText" aria-label="English text"></textarea>
@@ -189,7 +196,7 @@
     <div class="outblock"><div class="label">written</div><div class="roman" id="outRoman"></div></div>
     <div class="outblock"><div class="label">in your script</div><div class="script well" id="outScript"></div></div>
     <div class="outblock"><div class="label">pronunciation (ipa)</div><div class="ipaline" id="outIpa"></div></div>
-    <div class="btnrow"><button type="button" class="key ink" id="tSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="tSaveAudio" title="Full quality, for editing">save .wav</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
+    <div class="btnrow"><button type="button" class="key primary" id="tShare" hidden title="Send it with WhatsApp, messages or any app">share</button><button type="button" class="key ink" id="tSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="tSaveAudio" title="Full quality, for editing">save .wav</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
     <div class="lcd" id="tStatus"></div>
   </div>
   <div class="nextrow"><a class="key primary tall" href="#audio">next: audio <span aria-hidden="true">&rsaquo;</span></a></div>
@@ -199,15 +206,19 @@
 <section class="view" id="v-audio" hidden>
   <div class="panel">
     <h2><span><i>1</i>drop a track</span><span>english speech</span></h2>
-    <p class="hint">Xenoglot reads the track’s phrases, syllable rhythm and melody, then re-voices it in your language with the same timing.</p>
+    <p class="hint">Drop in a recording of English speech. Xenoglot works out what is said and when, then speaks it again in your language with the same timing.</p>
     <button type="button" class="dropzone" id="drop"><span class="led" id="dropLed"></span><span>add an audio file</span><small>mp3 &middot; wav &middot; m4a &middot; webm &middot; up to 10 min</small></button>
     <input id="fileTrack" type="file" accept="audio/*,video/*" hidden>
     <div class="lcd" id="dInfo"></div>
   </div>
   <div class="panel">
-    <h2><span><i>2</i>what is said</span><span>optional</span></h2>
-    <p class="hint">Paste the words for a true translation. Leave it empty and you get speech in your language that follows the track’s rhythm.</p>
-    <textarea id="dTranscript" placeholder="paste the english words spoken in the track"></textarea>
+    <h2><span><i>2</i>what is said</span><span>worked out for you</span></h2>
+    <p class="hint">Xenoglot can listen to the track and write down the English, one phrase per line, each with its timing. Edit the words if you like: keep the lines and every phrase lands exactly where the original was spoken. Or paste your own words.</p>
+    <div class="btnrow"><button type="button" class="key" id="dTranscribe" disabled title="Speech-to-text runs in your browser (Whisper). A 40 MB download the first time.">write it down for me</button>
+      <div class="chips"><label class="chip lp" title="When the box is empty, convert listens first"><input id="dAuto" type="checkbox" checked>work out the words when i convert</label></div></div>
+    <div class="lcd" id="dAsr"></div>
+    <textarea id="dTranscript" placeholder="the english words spoken in the track, one phrase per line"></textarea>
+    <p class="hint">speech-to-text is a 40 MB download the first time. the new track is spoken by the voice chosen in step 1. leave the box empty and untick the option for speech that only follows the rhythm.</p>
     <div class="control"><label class="control-top" for="dOrig"><span>original underneath</span><em id="oOrig">0%</em></label><input id="dOrig" type="range" min="0" max="0.6" step="0.02" value="0"></div>
     <button type="button" class="key primary tall wide" id="dGo" disabled><span aria-hidden="true">&#x25B6;</span> convert</button>
   </div>
@@ -219,7 +230,7 @@
       <button type="button" class="stopkey" id="dStop" aria-label="Stop" title="Stop">&#x25A0;</button>
     </div>
     <div class="roman" id="dRoman" style="font-size:17px"></div>
-    <div class="btnrow"><button type="button" class="key ink" id="dSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="dSave" title="Full quality, for editing">save .wav</button></div>
+    <div class="btnrow"><button type="button" class="key primary" id="dShare" hidden title="Send it with WhatsApp, messages or any app">share</button><button type="button" class="key ink" id="dSaveMp3" title="Small file that plays in WhatsApp, messages and on any phone">save .mp3 (for sharing)</button><button type="button" class="key" id="dSave" title="Full quality, for editing">save .wav</button></div>
     <div class="lcd" id="dStatus"></div>
   </div>
   <div class="nextrow"><a class="key primary tall" href="#script">next: script <span aria-hidden="true">&rsaquo;</span></a></div>
@@ -271,10 +282,19 @@
     <div class="lcd"><span id="statusLine">ready</span><span>local processing</span></div>
     <footer class="keys"><span class="on-grid"><kbd>Space</kbd>speak / stop <kbd>N</kbd>new language <kbd>1</kbd>–<kbd>5</kbd>steps</span><span class="on-grid">right-click a slider resets it</span></footer>
   </section>
+
+  <aside class="headcol" aria-label="Speaking head">
+    <div class="monitor"><canvas id="headCanvas" aria-label="A wireframe alien head that speaks the language"></canvas></div>
+    <div class="kgrid"><button type="button" class="key" id="headNew" title="Grow a different head for this language">&#x2726; new head</button><button type="button" class="key ink" id="headVideo" title="Record the head speaking, with sound, as a video file"><span class="dot"></span> save video</button></div>
+    <button type="button" class="key primary wide" id="headShare" hidden title="Send the video with WhatsApp, messages or any app">share video</button>
+    <div class="lcd" id="headStatus"></div>
+    <p class="hint on-grid" style="padding:4px 6px">drag to turn it. it speaks whatever is playing. every language grows its own head.</p>
+  </aside>
 </main>
 <div id="toast" role="status"></div>
 
 <script src="vendor/opentype.min.js"></script>
+<script src="head.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
