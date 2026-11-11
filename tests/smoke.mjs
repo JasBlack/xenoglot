@@ -69,6 +69,9 @@ try {
   const [share] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveMp3')]);
   const mp3 = await readFile(await share.path());
   const mp3ok = mp3.subarray(0, 3).toString('latin1') === 'ID3' || (mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0);
+  const [srt] = await Promise.all([p.waitForEvent('download'), p.click('#ovSrt')]);
+  const srtText = await readFile(await srt.path(), 'utf8');
+  check(srt.suggestedFilename().endsWith('.srt') && /^1\n\d\d:\d\d:\d\d,\d{3} --> \d\d:\d\d:\d\d,\d{3}\n.+\n.+\n/.test(srtText), 'subtitles save as an .srt with timings, english and alien lines');
   const [quick] = await Promise.all([p.waitForEvent('download'), p.click('#headAudio')]);
   check(quick.suggestedFilename().endsWith('.mp3'), 'the save audio key under the head saves an .mp3');
   check(share.suggestedFilename().endsWith('.mp3') && mp3ok && mp3.length > 10000 && mp3.length < wav.length / 3, 'speech saves as a small .mp3 for sharing');

@@ -412,7 +412,7 @@ function create(canvas, opts) {
   const m = { jaw: 0, lip: .1, round: 0, at: .5, tight: 0 }, F = [0, 500, 1500];
   const drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, idle: 0 }, ptr = { x: 0, y: 0, t: -99 };
   const pose = { yaw: 0, pitch: 0, roll: 0, zoom: 1 }, st = { blinks: [], look: [0, 0], breath: 0, perk: 0, widen: 0, think: 0, chatter: 0 };
-  const hist = new Float32Array(200); let hi = 0, histT = 0, fmt = null, quality = 0, cost = 8, slowFor = 0, fastFor = 0;
+  const hist = new Float32Array(200); let plate = null, backdrop = null, hi = 0, histT = 0, fmt = null, quality = 0, cost = 8, slowFor = 0, fastFor = 0;
   let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, subLines = null, subKey = '', subStyle = opts.subStyle || 2, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
 
   function setSeed(seed) { H = build(makeDNA(seed >>> 0)); st.blinks = H.eyes.map(() => 0); blinkAt = H.eyes.map(() => 1 + Math.random() * H.d.temper.blink); gest = null; nextGest = 2 + Math.random() * 3; }
@@ -485,6 +485,10 @@ function create(canvas, opts) {
         const px = p[0] + wob, py = p[1] - pivot, x0 = lerp(px, px * cr - py * sr, neck), y0 = lerp(py, px * sr + py * cr, neck), ya = lerp(1, cyaw, neck), sa = syaw * neck;
         let x = x0 * ya + p[2] * sa, z = -x0 * sa + p[2] * ya, y = y0 * lerp(1, cp, neck) - z * sp * neck; z = y0 * sp * neck + z * lerp(1, cp, neck); y += pivot;
         const f = cam / (cam - z); return [cx + x * scale * f, cy - y * scale * f, z]; };
+    const fa = C.feat.split(',').map(Number);
+    if (plate) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, Hh);   // plate: no creature. Your video fills the frame (cropped to fit), or plain black for the subtitles alone
+      const v = backdrop; if (plate === 'video' && v && v.readyState >= 2 && v.videoWidth) { const s2 = Math.max(W / v.videoWidth, Hh / v.videoHeight), vw = v.videoWidth * s2, vh = v.videoHeight * s2; ctx.drawImage(v, (W - vw) / 2, (Hh - vh) / 2, vw, vh); } }
+    else {
     let si = 0;
     for (const ln of lines(H, m, T, amp, st)) {
       if (ln.haze) { const q = proj(ln.haze); hz.push([q[0], q[1], ln.r * scale * 2, ln.color, Math.min(.6, ln.alpha * 2.2)]); continue; }
@@ -501,7 +505,7 @@ function create(canvas, opts) {
         (buckets[key] ||= []).push(a[0], a[1], b[0], b[1]); }
     }
     /* ----- the skins: a dark starfield, lit from the upper left, with the creature's colour glowing at the edges ----- */
-    const fa = C.feat.split(',').map(Number); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     const skin = (pt, NV, NT, flip, uo, us, ut, dim, dark, stars) => { const M = NT + 1, Q = new Array((NV + 1) * M), front = new Uint8Array(NV * NT), fills = {};
       for (let i = 0; i <= NV; i++) for (let j = 0; j <= NT; j++) Q[i * M + j] = proj(pt(i / NV, j / NT * TAU - Math.PI));
       for (let i = 0; i < NV; i++) for (let j = 0; j < NT; j++) { const a = Q[i * M + j], b = Q[i * M + j + 1], c = Q[(i + 1) * M + j + 1], e = Q[(i + 1) * M + j];
@@ -556,11 +560,12 @@ function create(canvas, opts) {
       ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = r * .07; ctx.beginPath(); ctx.arc(ox2, oy2, r * .72, .2 * Math.PI, .62 * Math.PI); ctx.stroke();   // and coming back up from below
       ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.ellipse(ox2 - r * .4, oy2 - r * .44, r * .17, r * .09, -.65, 0, TAU); ctx.fill(); ctx.restore();   // the glint
       ctx.restore(); }
+    }
     // read-outs, drawn on the screen itself so a recording carries them
     ctx.globalCompositeOperation = 'source-over'; const mono = (px, wt = 500) => `${wt} ${px * dpr}px "IBM Plex Mono", ui-monospace, monospace`, pad = 12 * dpr;
     ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = mono(9, 600); ctx.fillStyle = 'rgba(146,147,153,1)';
-    ctx.fillText((info.name || '').toUpperCase().split('').join(' '), pad, pad); ctx.font = mono(8); ctx.fillText('head ' + (d.seed >>> 0).toString(36).toUpperCase() + ' · ' + d.mood, pad, pad + 14 * dpr);
-    { const live = speech && amp > .03, half = (short ? 13 : 23) * dpr, k = half / 32, ox = W - pad - half, oy = pad + half, P = (x, y) => [ox + x * k, oy + y * k];
+    if (!plate) ctx.fillText((info.name || '').toUpperCase().split('').join(' '), pad, pad); ctx.font = mono(8); if (!plate) ctx.fillText('head ' + (d.seed >>> 0).toString(36).toUpperCase() + ' · ' + d.mood, pad, pad + 14 * dpr);
+    if (plate !== 'subs') { const live = speech && amp > .03, half = (short ? 13 : 23) * dpr, k = half / 32, ox = W - pad - half, oy = pad + half, P = (x, y) => [ox + x * k, oy + y * k];
       // the JAS.BLACK mark, made of the same stuff as the creature: a disc of its starfield skin, arms of its glowing line, a void eye with one star.
       // The arms curl and sway with the voice, the star looks where the creature looks, and the eye blinks now and then.
       ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'source-over'; const rr = 14.5 * k;
@@ -581,7 +586,7 @@ function create(canvas, opts) {
       // the signature: the JAS.BLACK wordmark under the mark, so pictures and videos carry it
       const sig = opts.signature; if (sig && sig.complete && sig.naturalWidth && !short) { const sw = half * 2.3, shh = sw * sig.naturalHeight / sig.naturalWidth; ctx.globalAlpha = .85; ctx.drawImage(sig, ox - sw / 2, oy + half + 1 * dpr, sw, shh); ctx.globalAlpha = 1; } }
     const sy = Hh - 22 * dpr, sh = 16 * dpr;   // the scope: loudness of the speech, with a playhead; a breath trace at rest
-    if (env && speech) { const now = speech.clock(), n = env.length; ctx.beginPath();
+    if (plate) { } else if (env && speech) { const now = speech.clock(), n = env.length; ctx.beginPath();
       for (let x = 0; x <= W - 2 * pad; x += 2 * dpr) { const i = Math.floor(x / (W - 2 * pad) * n), v = env[i] || 0; ctx.moveTo(pad + x, sy - v * sh * .5); ctx.lineTo(pad + x, sy + v * sh * .5 + dpr); }
       ctx.strokeStyle = `rgba(${C.feat},.55)`; ctx.lineWidth = dpr; ctx.stroke();
       const px = pad + clamp(now * 100 / n, 0, 1) * (W - 2 * pad); ctx.beginPath(); ctx.moveTo(px, sy - sh * .8); ctx.lineTo(px, sy + sh * .8); ctx.strokeStyle = `rgba(${C.tract},1)`; ctx.lineWidth = 1.5 * dpr; ctx.stroke(); }
@@ -625,7 +630,7 @@ function create(canvas, opts) {
   window.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); if (!r.width) return;   // it watches the pointer
     ptr.x = clamp((e.clientX - (r.left + r.width / 2)) / Math.max(260, innerWidth * .45), -1, 1); ptr.y = clamp((e.clientY - (r.top + r.height / 2)) / Math.max(260, innerHeight * .5), -1, 1); ptr.t = T; }, { passive: true });
   setSeed(1); requestAnimationFrame(tick);
-  return { setSub: n => { subStyle = n; }, setFormat: f => { fmt = f && f[0] > 0 ? [f[0] | 0, f[1] | 0] : null; }, quality: () => quality, setSeed, setInfo: i => { info = { ...info, ...i }; }, speak, stop, dna: () => H.d, isSpeaking: () => !!speech };
+  return { setPlate: (mode, video) => { plate = mode || null; backdrop = video || null; }, plate: () => plate, setSub: n => { subStyle = n; }, setFormat: f => { fmt = f && f[0] > 0 ? [f[0] | 0, f[1] | 0] : null; }, quality: () => quality, setSeed, setInfo: i => { info = { ...info, ...i }; }, speak, stop, dna: () => H.d, isSpeaking: () => !!speech };
 }
 window.XenoHead = { create, makeDNA };
 })();

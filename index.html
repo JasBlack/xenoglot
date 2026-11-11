@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="2.6.5">
+<body data-ui="dark" data-tool="xenoglot" data-version="2.7.0">
 <header class="topbar">
   <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
   <nav class="steps" aria-label="Sections">
@@ -118,6 +118,17 @@
       <div class="btnrow"><button type="button" class="key" id="tSaveAudio" title="Full quality, for editing">save .wav</button><button type="button" class="key" id="tCopy">copy text</button><button type="button" class="key" id="tSaveTxt">save .txt</button></div>
     </details>
     <div class="lcd" id="tStatus"></div>
+  </div>
+  <div class="panel" id="ovPanel">
+    <h2><span>subtitles for your own video</span><span>a seedance clip, for example</span></h2>
+    <p class="hint">Made a video elsewhere from this speech? Add it and the monitor shows it with these subtitles over it: press <b>speak</b> to check, <b>save video</b> to record the two together. Or save the subtitles on their own on black, lay that over your video in an editor and set its blend mode to <b>Screen</b>.</p>
+    <div class="btnrow"><button type="button" class="key" id="ovAdd">add your video</button><button type="button" class="key" id="ovClear" hidden>remove it</button><span class="hint" id="ovName"></span></div>
+    <div class="sub" id="ovOpts" hidden>
+      <div class="control"><label class="control-top" for="ovOffset"><span>speech starts at</span><em id="oOvOffset">0.00 s</em></label><input id="ovOffset" type="range" min="-2" max="5" step="0.05" value="0"></div>
+      <div class="chips"><label class="chip lp" title="Use the sound in your clip instead of the speech (the subtitles still follow the speech's timing)"><input id="ovOwn" type="checkbox">use the video's own sound</label></div>
+    </div>
+    <div class="btnrow"><button type="button" class="key ink" id="ovSubs" title="The subtitles alone on black, with the speech as sound, timed from 0 s like the audio file"><span class="dot"></span> save subtitles on black</button><button type="button" class="key" id="ovSrt" title="A subtitle file for any editor or platform">save subtitles (.srt)</button><select id="ovSrtKind" aria-label="What the .srt holds" style="width:auto"><option value="both">english + alien</option><option value="en">english only</option><option value="al">alien only (use its font)</option></select></div>
+    <input id="ovFile" type="file" accept="video/*" hidden>
   </div>
 </section>
 

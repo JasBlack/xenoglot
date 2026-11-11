@@ -597,9 +597,12 @@ let headSeed=null;
 function speakKey(on){ const k=$('#tSpeak'); if(!k) return; k.innerHTML=on?'&#x25A0; stop':'&#x25B6; speak'; k.classList.toggle('playing',on); }
 function applyHead(){ if(!head) return; if(headSeed!==L.head){ headSeed=L.head; head.setSeed(L.head>>>0); $('#headCanvas').dataset.seed=String(L.head>>>0); } head.setInfo({name:L.name||''}); }
 function stopAudio(){ if(head) head.stop(); $('#ledVoice').classList.remove('on'); speakKey(false); if(playing){ try{ playing.src.stop(); }catch(e){} cancelAnimationFrame(playing.raf); const p=playing; playing=null; p.done&&p.done(); } }
+let speechMute=false;
 function play(buf, canvas, alsoTo, onEnd){
   setTimeout(()=>{ $('#ledVoice').classList.add('on'); speakKey(true); });
-  stopAudio(); const ctx=getCtx(); const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); if(alsoTo) src.connect(alsoTo);
+  stopAudio(); const ctx=getCtx(); const src=ctx.createBufferSource(); src.buffer=buf;
+  const mute=speechMute; speechMute=false;   // with your video's own sound chosen, the speech plays silently: it only times the subtitles
+  if(mute){ const z=ctx.createGain(); z.gain.value=0; src.connect(z).connect(ctx.destination); } else { src.connect(ctx.destination); if(alsoTo) src.connect(alsoTo); }
   const t0=ctx.currentTime; src.start();
   if(head) head.speak({buf, timeline:buf.timeline, clock:()=>ctx.currentTime-t0});
   const st={src, raf:0, done:()=>{ canvas&&drawWave(canvas,buf,-1); onEnd&&onEnd(); }}; playing=st;
@@ -1333,27 +1336,63 @@ const VFMT={'9:16':[9,16],'4:5':[4,5]}; let vfmt=VFMT[store.get('xenoglot-v1-vfm
 const markFmt=()=>$$('#vFmt .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===vfmt));
 $('#vFmt').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return; vfmt=b.dataset.v; store.set('xenoglot-v1-vfmt',vfmt); markFmt(); }); markFmt();
 const videoSize=()=>{ const w=(matchMedia('(max-width:850px)').matches||(navigator.hardwareConcurrency||4)<=4)?720:1080, [a,b]=VFMT[vfmt]; return [w, Math.round(w*b/a/2)*2]; };
-async function recordVideo(){ if(videoBusy||!head) return; const st=$('#headStatus'), cv=$('#headCanvas'), key=$('#headVideo');
+async function recordVideo(o={}){ if(videoBusy||!head) return; const st=$('#headStatus'), cv=$('#headCanvas'), key=o.subsOnly?$('#ovSubs'):$('#headVideo'), was=head.plate();
   const ty=window.MediaRecorder && cv.captureStream ? VIDEO_TYPES.find(t=>MediaRecorder.isTypeSupported(t[0])) : null;
   if(!ty){ toast('This browser can’t record video. Try Chrome, Edge or Safari.'); return; }
   videoBusy=true; key.disabled=true; let timer=0;
   try{ st.textContent='getting the speech ready…';
     const buf=(!$('#v-audio').hidden && dBuf) ? dBuf : await getTBuf();
-    const size=videoSize(); head.setFormat(size); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));   // the monitor becomes the video frame while it records
+    const size=videoSize(); head.setFormat(size); if(o.subsOnly) head.setPlate('subs'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));   // the monitor becomes the video frame while it records
     const ctx=getCtx(), dest=ctx.createMediaStreamDestination(), stream=new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
     const rec=new MediaRecorder(stream,{mimeType:ty[0], videoBitsPerSecond:size[0]>=1080?8e6:5e6, audioBitsPerSecond:160000}), chunks=[]; rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
     const stopped=new Promise(r=>rec.onstop=r); rec.start(); key.classList.add('recording'); $('#ledRec').classList.add('on'); const t0=performance.now();
     timer=setInterval(()=>{ st.textContent=`recording video… ${fmtS((performance.now()-t0)/1000)} of ${fmtS(buf.duration+.8)}`; },250);
-    await new Promise(r=>setTimeout(r,350));                                   // a beat of the head at rest first
-    await new Promise(done=>play(buf, !$('#v-translate').hidden?$('#waveT'):!$('#v-audio').hidden?$('#waveD'):null, dest, done));
-    await new Promise(r=>setTimeout(r,450)); rec.stop(); await stopped;
-    head.setFormat(null); const blob=new Blob(chunks,{type:ty[0].split(';')[0]}), name=slug(L.name)+'-'+vfmt.replace(':','x')+'.'+ty[1];
+    const withVid=!o.subsOnly && back.vid; if(withVid && back.own){ backAudio(); back.gain.connect(dest); }
+    if(o.subsOnly){} else if(withVid) await backStart(); else await new Promise(r=>setTimeout(r,350));   // subtitles alone start at once, to line up with the audio file; your video starts with its own lead-in; the creature gets a beat at rest
+    speechMute=!!(withVid&&back.own); await new Promise(done=>play(buf, !$('#v-translate').hidden?$('#waveT'):!$('#v-audio').hidden?$('#waveD'):null, dest, done));
+    if(withVid){ const v=back.vid, until=performance.now()+30000; while(!v.ended && !v.paused && performance.now()<until) await new Promise(r=>setTimeout(r,100)); }   // and runs to the end of your clip (up to 30 s more)
+    else await new Promise(r=>setTimeout(r,o.subsOnly?150:450));
+    rec.stop(); await stopped; if(withVid && back.own) back.gain.disconnect(dest); backPause();
+    head.setFormat(null); head.setPlate(was, back.vid); const blob=new Blob(chunks,{type:ty[0].split(';')[0]}), name=slug(L.name)+(o.subsOnly?'-subtitles':withVid?'-'+slug(back.name.replace(/\.[^.]+$/,'')):'')+'-'+vfmt.replace(':','x')+'.'+ty[1];
     videoKeep=new File([blob],name,{type:blob.type}); st.textContent=`video ready · ${vfmt} · ${size[0]}×${size[1]} · ${(blob.size/1e6).toFixed(1)} MB · .${ty[1]}`+(ty[1]==='mp4'?'':' (this browser can’t make .mp4: use Chrome, Edge or Safari for Instagram)');
     $('#headShare').hidden=!canShareFile(videoKeep);
     await saveFile(name, blob);
-  }catch(e){ st.textContent=''; toast(e.message||'The video couldn’t be recorded.'); }
+  }catch(e){ st.textContent=''; head.setFormat(null); head.setPlate(was, back.vid); toast(e.message||'The video couldn’t be recorded.'); }
   finally{ clearInterval(timer); key.classList.remove('recording'); $('#ledRec').classList.remove('on'); videoBusy=false; key.disabled=false; } }
-$('#headVideo').addEventListener('click',recordVideo);
+$('#headVideo').addEventListener('click',()=>recordVideo());
+
+/* ---------- subtitles for your own video: a clip (made elsewhere, from this speech) plays behind the subtitles ---------- */
+const back={vid:null, url:'', name:'', src:null, gain:null, own:false, offset:0};
+function backPause(){ if(back.vid) back.vid.pause(); }
+// the clip's own sound, routed through the page's audio so a recording can carry it (made once per clip)
+function backAudio(){ getCtx(); if(!back.src){ back.src=actx.createMediaElementSource(back.vid); back.gain=actx.createGain(); back.src.connect(back.gain).connect(actx.destination); } }
+// your clip starts from its beginning; the speech comes in `offset` seconds later (or that much before, if negative)
+async function backStart(){ const v=back.vid; if(!v) return; v.pause(); v.currentTime=Math.max(0,-back.offset); v.muted=!back.own; if(back.own){ backAudio(); back.gain.gain.value=1; } else if(back.gain) back.gain.gain.value=0;
+  try{ await v.play(); }catch(e){} if(back.offset>0) await new Promise(r=>setTimeout(r,back.offset*1000)); }
+async function addBack(file){ if(!file) return; if(back.vid) clearBack();
+  const v=document.createElement('video'); v.playsInline=true; v.muted=true; v.preload='auto'; v.crossOrigin='anonymous'; back.url=URL.createObjectURL(file); v.src=back.url;
+  try{ await new Promise((res,rej)=>{ v.onloadeddata=res; v.onerror=()=>rej(new Error('That video won’t play in this browser. Try an .mp4.')); }); }catch(e){ URL.revokeObjectURL(back.url); toast(e.message); return; }
+  back.vid=v; back.name=file.name; back.src=null; back.gain=null; v.currentTime=0; head&&head.setPlate('video',v);
+  const ar=v.videoWidth/v.videoHeight; vfmt=Math.abs(ar-9/16)<Math.abs(ar-4/5)?'9:16':'4:5'; store.set('xenoglot-v1-vfmt',vfmt); markFmt();   // the video shape follows your clip
+  $('#ovName').textContent=`${file.name} · ${fmtS(v.duration)} · ${v.videoWidth}×${v.videoHeight}`; $('#ovClear').hidden=false; $('#ovOpts').hidden=false;
+  toast('Your video is behind the subtitles now. Press speak to see them together, or save video.'); }
+function clearBack(){ backPause(); if(back.src){ try{ back.src.disconnect(); }catch(e){} } if(back.url) URL.revokeObjectURL(back.url); back.vid=null; back.src=null; back.gain=null; back.name='';
+  head&&head.setPlate(null); $('#ovName').textContent=''; $('#ovClear').hidden=true; $('#ovOpts').hidden=true; }
+$('#ovAdd').addEventListener('click',()=>$('#ovFile').click());
+$('#ovFile').addEventListener('change',e=>{ addBack(e.target.files[0]); e.target.value=''; });
+$('#ovClear').addEventListener('click',clearBack);
+$('#ovOffset').addEventListener('input',e=>{ back.offset=+e.target.value; $('#oOvOffset').textContent=(back.offset>0?'+':'')+back.offset.toFixed(2)+' s'; });
+$('#ovOwn').addEventListener('change',e=>{ back.own=e.target.checked; });
+$('#ovSubs').addEventListener('click',()=>recordVideo({subsOnly:true}));
+// subtitles as a file: the same lines as on screen, timed to the speech (shifted by the offset when your video is in)
+$('#ovSrt').addEventListener('click',async()=>{ const buf=(!$('#v-audio').hidden && dBuf) ? dBuf : await getTBuf(), segs=(buf.timeline&&buf.timeline.segs)||[], kind=$('#ovSrtKind').value, sh=back.vid?back.offset:0;
+  const words=[]; let cur=null; for(const s of segs){ if(s.k&&s.w){ if(!cur){ cur={w:s.w,en:s.en||'',t0:s.t,t1:s.t+s.d}; words.push(cur); } else cur.t1=s.t+s.d; } else cur=null; }
+  const lines=[]; let ln=[]; words.forEach((w,i)=>{ ln.push(w); const nx=words[i+1], len=ln.reduce((a,x)=>a+Math.max(x.w.length,x.en.length)+1,0); if(!nx||ln.length>=6||len>34||nx.t0-w.t1>.3){ lines.push(ln); ln=[]; } });
+  const ts=t=>{ t=Math.max(0,t+sh); const h=Math.floor(t/3600), m=Math.floor(t%3600/60), s=Math.floor(t%60), ms=Math.round((t%1)*1000)%1000; return [h,m,s].map(x=>String(x).padStart(2,'0')).join(':')+','+String(ms).padStart(3,'0'); };
+  const body=lines.map((l,i)=>{ const en=l.map(w=>w.en.toLowerCase()).join(' '), al=l.map(w=>w.w).join(' '); return `${i+1}\n${ts(l[0].t0)} --> ${ts(l[l.length-1].t1+.15)}\n${kind==='en'?en:kind==='al'?al:en+'\n'+al}\n`; }).join('\n');
+  if(!lines.length){ toast('Nothing to subtitle yet. Type some English first.'); return; }
+  await saveFile(slug(L.name)+'-subtitles'+(kind==='both'?'':'-'+(kind==='en'?'english':'alien'))+'.srt', new Blob([body],{type:'text/plain'}));
+  if(kind==='al') toast('Tip: install this language’s font (script tab) and set it as the subtitle font, and they show in its own letters.'); });
 $('#headShare').addEventListener('click',async()=>{ if(!videoKeep) return; try{ await navigator.share({files:[videoKeep], title:L.name+' (Xenoglot)'}); }catch(e){ if(!e||e.name!=='AbortError') toast('Sharing didn’t work here. The video was saved instead.'); } });
 
 /* ---------- first visit: a short welcome; on phones the language library folds away ---------- */
@@ -1392,7 +1431,7 @@ document.addEventListener('contextmenu',e=>{ const el=e.target; if(e.defaultPrev
 
 
 /* ---------- transport + shortcuts ---------- */
-async function speakNow(){ if(playing){ stopAudio(); return; } getCtx(); if(!lastT) renderTranslate(); const buf=await getTBuf(); play(buf, $('#v-translate').hidden?null:$('#waveT')); }
+async function speakNow(){ if(playing){ stopAudio(); backPause(); return; } getCtx(); if(!lastT) renderTranslate(); const buf=await getTBuf(); await backStart(); speechMute=!!(back.vid&&back.own); play(buf, $('#v-translate').hidden?false:$('#waveT')); }
 $$('[data-proxy]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.proxy).click()));
 document.addEventListener('keydown',e=>{ if(e.metaKey||e.ctrlKey||e.altKey) return; const t=e.target; if(t.closest&&t.closest('input,textarea,select,[contenteditable]')) return;
   if(e.code==='Space'){ e.preventDefault(); speakNow(); }
