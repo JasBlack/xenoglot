@@ -548,11 +548,16 @@ async function naturalFx(clips, srIn, voice, rate, dur, extra={}){
     if(voice.choir>0){ voiceSrc(6+voice.choir*6, voice.choir*.7, .012); voiceSrc(-(7+voice.choir*6), voice.choir*.7, .021); } }
   // growl: the voice is shaken at half its pitch, like a second, rougher set of vocal folds
   let src=mix; if(voice.growl>0){ const gm=ctx.createGain(); gm.gain.value=1-voice.growl*.4; const go=ctx.createOscillator(); go.type='sawtooth'; go.frequency.value=Math.max(24,voice.pitch*.5); const gd=ctx.createGain(); gd.gain.value=voice.growl*.4; go.connect(gd).connect(gm.gain); go.start(0); mix.connect(gm); src=gm; }
-  // breath: hiss laid under each phrase
+  // breath: air on the voice. It follows the voice's own loudness (10 ms steps), so pauses and the silence around a phrase stay
+  // silent; before 2.6.3 it was held at one level under each whole phrase, which sounded like a bed of white noise
   if(voice.breath>.05){ const nb=ctx.createBuffer(1,sr,sr), nd=nb.getChannelData(0); for(let i=0;i<sr;i++) nd[i]=Math.random()*2-1; const ns=ctx.createBufferSource(); ns.buffer=nb; ns.loop=true;
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200*voice.formant; bp.Q.value=.6; const ng=ctx.createGain(); ng.gain.value=0;
-    for(const c of clips){ const cd=c.raw.length/srIn/(rate*(c.squeeze||1)); ng.gain.setValueAtTime(0,c.t); ng.gain.linearRampToValueAtTime(voice.breath*.07,c.t+.06); ng.gain.setValueAtTime(voice.breath*.07,Math.max(c.t+.07,c.t+cd-.08)); ng.gain.linearRampToValueAtTime(0,c.t+cd); }
-    ns.connect(bp).connect(ng).connect(out); ns.start(0); }
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2600*voice.formant; bp.Q.value=.9; const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=7000; const ng=ctx.createGain(); ng.gain.value=0;
+    for(const c of clips){ const step=Math.round(srIn*.01), n=Math.floor(c.raw.length/step); if(n<2) continue; const env=new Float32Array(n); let top=1e-6;
+      for(let i=0;i<n;i++){ let q=0; for(let j=i*step;j<(i+1)*step;j++) q+=c.raw[j]*c.raw[j]; env[i]=Math.sqrt(q/step); }
+      const sorted=Float32Array.from(env).sort(); top=sorted[Math.floor(n*.95)]||1e-6;
+      for(let i=0;i<n;i++){ const v=Math.min(1,env[i]/top); env[i]=voice.breath*.05*(v<.08?0:v); }   // nothing under the quiet parts
+      try{ ng.gain.setValueCurveAtTime(env, c.t, c.raw.length/srIn/(rate*(c.squeeze||1))); }catch(e){} }
+    ns.connect(bp).connect(lp).connect(ng).connect(out); ns.start(0); }
   const dry=ctx.createGain(); dry.gain.value=1-voice.ring*.85; src.connect(dry).connect(out);
   if(voice.ring>0){ const ring=ctx.createGain(); ring.gain.value=0; const ro=ctx.createOscillator(); ro.frequency.value=40+voice.formant*35; ro.connect(ring.gain); ro.start(0);
     const wet=ctx.createGain(); wet.gain.value=voice.ring*1.5; src.connect(ring).connect(wet).connect(out); }
@@ -987,6 +992,8 @@ $('#fitSecs').addEventListener('input',e=>{ fit.secs=+e.target.value; tBuf=null;
 $('#tSpeak').addEventListener('click',()=>{ if(location.hash.slice(1)!=='translate' && !playing) location.hash='translate'; speakNow(); });
 $('#tSaveAudio').addEventListener('click',async()=>exportAudio(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
 $('#tSaveMp3').addEventListener('click',async()=>exportMp3(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
+// the audio key under the head: the speech as an .mp3, or the converted track when the audio section has one
+$('#headAudio').addEventListener('click',()=>{ getCtx(); (!$('#v-audio').hidden && dBuf ? $('#dSaveMp3') : $('#tSaveMp3')).click(); });
 $('#tShare').addEventListener('click',async()=>shareAudio(await getTBuf(), slug(L.name)+'-speech', $('#tStatus')));
 $('#dShare').addEventListener('click',()=>dBuf&&shareAudio(dBuf, slug(L.name)+'-'+slug(track.name.replace(/\.[^.]+$/,'')), $('#dStatus')));
 if(canShareFiles && !(window.claude && window.claude.use)){ $('#tShare').hidden=false; $('#dShare').hidden=false; }

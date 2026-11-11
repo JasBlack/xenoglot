@@ -69,6 +69,8 @@ try {
   const [share] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveMp3')]);
   const mp3 = await readFile(await share.path());
   const mp3ok = mp3.subarray(0, 3).toString('latin1') === 'ID3' || (mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0);
+  const [quick] = await Promise.all([p.waitForEvent('download'), p.click('#headAudio')]);
+  check(quick.suggestedFilename().endsWith('.mp3'), 'the save audio key under the head saves an .mp3');
   check(share.suggestedFilename().endsWith('.mp3') && mp3ok && mp3.length > 10000 && mp3.length < wav.length / 3, 'speech saves as a small .mp3 for sharing');
   await p.click('#langToggle');
   check((await p.$$('#exList .chip')).length >= 1, 'examples listed in the library');

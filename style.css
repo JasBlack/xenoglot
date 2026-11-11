@@ -106,7 +106,7 @@ main.console{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr
 .nudge b{color:var(--text);font-weight:500}
 .nudge .key{height:28px}
 .headcol #langName{font:600 14px var(--mono);padding:8px 10px;text-align:center}
-.headkeys{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
+.headkeys{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .headkeys .key{padding:0 8px;min-width:0}
 #tSpeak{height:46px;font-size:12px;letter-spacing:.08em}
 #tSpeak.playing{background:var(--ink);color:var(--inktext);border-color:var(--ink);box-shadow:0 2px 0 var(--shadow)}
