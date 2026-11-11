@@ -607,6 +607,7 @@ function play(buf, canvas, alsoTo, onEnd){
   if (canvas){ const tick=()=>{ if(playing!==st) return; drawWave(canvas,buf,(ctx.currentTime-t0)/buf.duration); st.raf=requestAnimationFrame(tick); }; tick(); }
 }
 function drawWave(cv, buf, pos){
+  if(cv.id==='waveT') cv.closest('.well').classList.toggle('empty',!buf);   // with no speech yet, the panel says what it is for instead of sitting black
   const g=cv.getContext('2d'); const W=cv.width=(cv.clientWidth||600)*devicePixelRatio, H=cv.height=(cv.clientHeight||54)*devicePixelRatio;
   const cs=getComputedStyle(document.body); g.clearRect(0,0,W,H);
   if(!buf) return;
@@ -984,7 +985,7 @@ async function makeSpeech(){
   store.set('xenoglot-v1-pace',JSON.stringify(pace)); updateEst();
   return {buf,secs}; }
 async function getTBuf(){ if(!tBuf){ $('#tStatus').textContent='synthesizing…'; setStatus('synthesizing…');
-    const {buf,secs}=await makeSpeech(); tBuf=buf;
+    const {buf,secs}=await makeSpeech(); tBuf=buf; drawWave($('#waveT'),tBuf,-1);   // the wave shows however the speech was made
     const msg=`${fmtS(tBuf.duration)} of speech${fit.on?` (asked for ${fmtS(fit.secs)})`:''} · made in ${fmtS(secs)}`;
     $('#tStatus').textContent=msg; setStatus(msg); } return tBuf; }
 $('#fitOn').addEventListener('change',e=>{ fit.on=e.target.checked; $('#fitCtl').hidden=!fit.on; $('#fitHint').hidden=!fit.on; if(fit.on) fit.secs=0; tBuf=null; updateEst(); });
