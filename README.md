@@ -14,7 +14,7 @@ Build a new spoken language on top of English grammar, entirely in your browser.
 
 ### The speaking head
 
-Every language grows its own wireframe alien head, drawn like an oscilloscope trace: its own skull, eyes (one, a row, a spider cluster, a ring right round the head, or on stalks), nose, mouth, colours and extras such as antennae, horns, fins, mandibles or tentacles. It speaks whatever is playing. The jaw, lips and the glowing vocal tract inside it follow the sounds actually being made, with the current word and its meaning as a caption and live pitch and resonance read-outs. Drag to turn it, press **new head** for a different one, and **save video** to record it speaking with sound.
+Every language grows its own wireframe alien head, drawn like an oscilloscope trace: its own skull, eyes (one, a row, a spider cluster, a ring right round the head, or on stalks), nose, mouth, colours and extras such as antennae, horns, fins, mandibles or tentacles. You can see inside it: a brain (six kinds), nerves from every eye, teeth, tongue, bones, windpipes of different sizes, air sacs and a diaphragm that breathes. Each head has its own temperament and habits, so it blinks, glances, tilts, yawns or twitches in its own way, and it watches your pointer. Most are drawn with a loose, broken, glowing line, as if sketched by hand. It speaks whatever is playing. The jaw, lips and the glowing vocal tract inside it follow the sounds actually being made, with the current word and its meaning as a caption and live pitch and resonance read-outs. Drag to turn it, press **new head** for a different one, and **save video** to record it speaking with sound.
 
 ### How many sounds does a language need?
 
