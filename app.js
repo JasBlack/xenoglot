@@ -287,7 +287,7 @@ function tokensToWords(toks){
   return out;
 }
 let noiseBuf=null, NOISE_TRIM=.15, VOICE_TRIM=1; // trims measured so hiss sits 10-20 dB under the vowels, as in real speech
-if(/[?&]debug\b/.test(location.search)||window.__xgDebug) window.__xg={ getLang:()=>L, setTrim:(n,v)=>{ NOISE_TRIM=n; VOICE_TRIM=v; }, run:(keys,voice)=>{ let t=.05; const segs=keys.map(([k,d])=>{ const s={k,t,d,p:(voice||L.voice).pitch,a:1}; t+=d; return s; }); return render(segs,t+.05,voice||L.voice,{raw:true}); } };
+if(/[?&]debug\b/.test(location.search)||window.__xgDebug) window.__xg={ head:()=>head, getLang:()=>L, setTrim:(n,v)=>{ NOISE_TRIM=n; VOICE_TRIM=v; }, run:(keys,voice)=>{ let t=.05; const segs=keys.map(([k,d])=>{ const s={k,t,d,p:(voice||L.voice).pitch,a:1}; t+=d; return s; }); return render(segs,t+.05,voice||L.voice,{raw:true}); } };
 function smoothNoise(ctx, dur, rate, seed){ // slowly wandering random signal in -1..1, for jitter and shimmer
   const sr=ctx.sampleRate, n=Math.ceil(sr*dur)+1, b=ctx.createBuffer(1,n,sr), d=b.getChannelData(0), r=rngFrom(seed);
   const step=Math.max(1,Math.round(sr/rate)); let a=r()*2-1, z=r()*2-1;
