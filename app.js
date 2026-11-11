@@ -547,7 +547,12 @@ async function speakWords(words, speedMul=1, fitting=false){
 /* ---------- playback, waveform, export ---------- */
 let playing=null;
 // the speaking head on the monitor (head.js); every language has its own, grown from L.head
-const head = window.XenoHead && $('#headCanvas') ? XenoHead.create($('#headCanvas'), {sounds:PM}) : null;
+// the head's subtitles are written in the language's own script: one Path2D per letter, cached until the alphabet changes
+const scriptPaths=new Map();
+const headScript={ width:(word,h)=>toKeys(word).length*100*h/128,
+  draw(ctx,word,x,y,h){ const s=h/128; toKeys(word).forEach((k,i)=>{ const key=k+'|'+gver; let p=scriptPaths.get(key); if(!p){ if(scriptPaths.size>400) scriptPaths.clear(); p=new Path2D(glyphD(k)); scriptPaths.set(key,p); }
+    ctx.save(); ctx.translate(x+(i*100+10)*s, y+14*s); ctx.scale(s,s); ctx.fill(p); ctx.restore(); }); } };
+const head = window.XenoHead && $('#headCanvas') ? XenoHead.create($('#headCanvas'), {sounds:PM, script:headScript}) : null;
 let headSeed=null;
 function speakKey(on){ const k=$('#tSpeak'); if(!k) return; k.innerHTML=on?'&#x25A0; stop':'&#x25B6; speak'; k.classList.toggle('playing',on); }
 function applyHead(){ if(!head) return; if(headSeed!==L.head){ headSeed=L.head; head.setSeed(L.head>>>0); $('#headCanvas').dataset.seed=String(L.head>>>0); } head.setInfo({name:L.name||''}); }

@@ -3,7 +3,8 @@
 // tongue, bones, windpipes, air sacs and a diaphragm on the inside; and a temperament that decides how it
 // moves when nothing is happening. While speech plays, the jaw, lips, tongue and the glowing vocal tract
 // follow the sounds actually being spoken (timings from the synthesizer), gated by loudness.
-//   const head = XenoHead.create(canvas, { sounds: PM });   // PM: key → {t:type, f:[F1,F2,F3], ipa}
+//   const head = XenoHead.create(canvas, { sounds: PM, script });   // PM: key → {t:type, f:[F1,F2,F3], ipa}
+//   script (optional): { draw(ctx, word, x, y, height), width(word, height) } draws a word in the language's own letters for the subtitles
 //   head.setSeed(1234); head.setInfo({ name: 'Velnari' });
 //   head.speak({ buf, timeline:{ segs:[{k,t,d,p,w,en}] }, clock: () => secondsSinceStart }); head.stop();
 (function () {
@@ -395,7 +396,7 @@ function create(canvas, opts) {
   const m = { jaw: 0, lip: .1, round: 0, at: .5, tight: 0 }, F = [0, 500, 1500];
   const drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, idle: 0 }, ptr = { x: 0, y: 0, t: -99 };
   const pose = { yaw: 0, pitch: 0, roll: 0, zoom: 1 }, st = { blinks: [], look: [0, 0], breath: 0, perk: 0, widen: 0, think: 0, chatter: 0 };
-  let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
+  let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
 
   function setSeed(seed) { H = build(makeDNA(seed >>> 0)); st.blinks = H.eyes.map(() => 0); blinkAt = H.eyes.map(() => 1 + Math.random() * H.d.temper.blink); gest = null; nextGest = 2 + Math.random() * 3; }
   function envelope(buf) {
@@ -403,8 +404,12 @@ function create(canvas, opts) {
     for (let i = 0; i < n; i++) { let s = 0; const o = i * hop, len = Math.min(hop, d.length - o); for (let j = 0; j < len; j++) s += d[o + j] * d[o + j]; e[i] = Math.sqrt(s / Math.max(1, len)); }
     const sorted = Float32Array.from(e).sort(), ref = sorted[Math.floor(n * .95)] || 1e-6; for (let i = 0; i < n; i++) e[i] = Math.min(1, e[i] / ref); return e;
   }
-  function speak(s) { speech = s; env = s.buf ? envelope(s.buf) : null; segIdx = 0; caption = null; gest = null; }
-  function stop() { speech = null; env = null; caption = null; }
+  // subtitles: the words of the speech in short lines (up to four words or about twenty letters), split where the speaker pauses
+  function subtitles(segs) { const words = []; let cur = null;
+    for (const s of segs) { if (s.k && s.w) { if (!cur) { cur = { w: s.w, en: s.en || '', t0: s.t, t1: s.t + s.d }; words.push(cur); } else cur.t1 = s.t + s.d; } else cur = null; }
+    const out = []; let line = [], len = 0; words.forEach((w, i) => { line.push(w); len += Math.max(w.w.length, w.en.length * .6); const nx = words[i + 1]; if (!nx || line.length >= 4 || len + Math.max(nx.w.length, nx.en.length * .6) > 20 || nx.t0 - w.t1 > .3) { out.push(line); line = []; len = 0; } }); return out.length ? out : null; }
+  function speak(s) { speech = s; env = s.buf ? envelope(s.buf) : null; segIdx = 0; caption = null; gest = null; subs = s.timeline && s.timeline.segs ? subtitles(s.timeline.segs) : null; }
+  function stop() { speech = null; env = null; caption = null; subs = null; }
 
   function step(dt) {
     T += dt; const d = H.d, tp = d.temper; let target = shapeOf(null, sounds), loud = 0, f0 = 0, stressed = false;
@@ -501,10 +506,18 @@ function create(canvas, opts) {
     else { ctx.beginPath(); for (let x = 0; x <= W - 2 * pad; x += 3 * dpr) { const y = sy - Math.sin((T - (1 - x / (W - 2 * pad)) * 6) * TAU * d.breath + d.phase) * sh * .32; x ? ctx.lineTo(pad + x, y) : ctx.moveTo(pad + x, y); }
       ctx.strokeStyle = `rgba(${C.feat},.3)`; ctx.lineWidth = dpr; ctx.stroke(); }
     ctx.globalCompositeOperation = 'source-over'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';   // the word being spoken, and what it means
-    if (caption && speech) { ctx.font = `400 ${22 * dpr}px "Charis SIL", Georgia, serif`;
-      const tw = Math.max(ctx.measureText(caption.w).width, 60 * dpr) + 28 * dpr; ctx.fillStyle = 'rgba(11,11,12,.72)'; ctx.fillRect(cx - tw / 2, Hh - 86 * dpr, tw, 48 * dpr);
-      ctx.fillStyle = 'rgba(228,228,225,1)'; ctx.fillText(caption.w, cx, Hh - 62 * dpr);
-      ctx.font = mono(9); ctx.fillStyle = `rgba(${C.feat},.9)`; ctx.fillText((caption.en || '').toLowerCase(), cx, Hh - 46 * dpr); }
+    if (subs && speech) { const now = speech.clock(); let li = 0; for (let i = 0; i < subs.length; i++) if (subs[i][0].t0 <= now + .05) li = i;
+      const line = subs[li], hs = 26 * dpr, gap = 14 * dpr, script = opts.script; ctx.font = mono(10);
+      const cols = line.map(w => { const sw = script ? script.width(w.w, hs) : ctx.measureText(w.w).width * 1.6, ew = ctx.measureText(w.en.toLowerCase()).width; return { w, sw, ew, cw: Math.max(sw, ew) }; });
+      const total = cols.reduce((a, c) => a + c.cw, 0) + gap * (cols.length - 1), k = Math.min(1, (W - 2 * pad - 20 * dpr) / total), top = Hh - 104 * dpr, bw = total * k + 28 * dpr;
+      ctx.fillStyle = 'rgba(11,11,12,.78)'; ctx.fillRect(cx - bw / 2, top, bw, 62 * dpr);
+      let x = cx - total * k / 2; ctx.textBaseline = 'top';
+      cols.forEach((c, i) => { const nx = line[i + 1], on = now >= c.w.t0 - .04 && now < (nx ? nx.t0 - .04 : c.w.t1 + .25), mid = x + c.cw * k / 2;
+        ctx.fillStyle = on ? 'rgba(255,255,255,1)' : 'rgba(228,228,225,.34)';
+        if (script) script.draw(ctx, c.w.w, mid - c.sw * k / 2, top + 7 * dpr, hs * k); else { ctx.font = `400 ${20 * k * dpr}px "Charis SIL", Georgia, serif`; ctx.fillText(c.w.w, mid, top + 8 * dpr); }
+        ctx.font = mono(Math.max(7, 10 * k), on ? 600 : 400); ctx.fillStyle = on ? `rgba(${C.feat},1)` : 'rgba(146,147,153,.8)'; ctx.fillText(c.w.en.toLowerCase(), mid, top + 41 * dpr);
+        if (on) { ctx.fillStyle = `rgba(${C.feat},.9)`; ctx.fillRect(mid - c.cw * k / 2, top + 57 * dpr, c.cw * k, 1.5 * dpr); }
+        x += (c.cw + gap) * k; }); }
   }
 
   function fit() { const dpr = 2, w = Math.round((canvas.clientWidth || 320) * dpr), h = Math.round((canvas.clientHeight || 400) * dpr);   /* always 2×: fine lines stay crisp, recordings are about 688 × 960 */
