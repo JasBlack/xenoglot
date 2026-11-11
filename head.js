@@ -182,7 +182,7 @@ function build(d) {
       default: pair(g, v0, s);
     } }
   { const pos = e => S(e.v, e.th, 0), keep = [];   // no eye may overlap another: the smaller one shrinks to fit, or goes
-    for (const e of [...eyes].sort((a, b) => b.s - a.s)) { if (!e.stalk) for (const k of keep) { if (k.stalk) continue; const dd = Math.hypot(...sub(pos(e), pos(k))); e.s = Math.min(e.s, dd / 1.32 - k.s); } if (e.s > .03) keep.push(e); }
+    for (const e of [...eyes].sort((a, b) => b.s - a.s)) { if (!e.stalk) for (const k of keep) { if (k.stalk) continue; const dd = Math.hypot(...sub(pos(e), pos(k))); e.s = Math.min(e.s, dd / 1.55 - k.s);   /* room for the domes to bulge without touching */ } if (e.s > .03) keep.push(e); }
     eyes.length = 0; eyes.push(...keep); }
   // where the brain sits, and how much room it has
   const vb = d.vm + .42 * (1 - d.vm), pf = S(vb, 0, 0), pb = S(vb, Math.PI, 0), ps = S(vb, Math.PI / 2, 0);
@@ -413,7 +413,7 @@ function create(canvas, opts) {
   const drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, idle: 0 }, ptr = { x: 0, y: 0, t: -99 };
   const pose = { yaw: 0, pitch: 0, roll: 0, zoom: 1 }, st = { blinks: [], look: [0, 0], breath: 0, perk: 0, widen: 0, think: 0, chatter: 0 };
   const hist = new Float32Array(200); let hi = 0, histT = 0, fmt = null, quality = 0, cost = 8, slowFor = 0, fastFor = 0;
-  let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, subLines = null, subKey = '', subStyle = opts.subStyle || 1, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
+  let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, subLines = null, subKey = '', subStyle = opts.subStyle || 2, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
 
   function setSeed(seed) { H = build(makeDNA(seed >>> 0)); st.blinks = H.eyes.map(() => 0); blinkAt = H.eyes.map(() => 1 + Math.random() * H.d.temper.blink); gest = null; nextGest = 2 + Math.random() * 3; }
   function envelope(buf) {
@@ -540,14 +540,20 @@ function create(canvas, opts) {
       ctx.strokeStyle = `rgba(${color},${al * .9})`; ctx.lineWidth = w * dpr; ctx.stroke(); }   // the trace
     /* ----- eyes: a black void set into the skin, faint stars round its edge, one bright star that looks where the creature looks ----- */
     const rgbaF = (a, k = 1) => `rgba(${fa.map(v => Math.round(Math.min(255, v * k))).join(',')},${a})`;
-    for (const e of eyes) { if (e.nz < .12 || e.r < 1.5 * dpr) continue; const r = e.r, open = 1 - .92 * e.blink;
-      ctx.save(); ctx.translate(e.x, e.y); const an = Math.atan2(-e.ny, e.nx); ctx.rotate(an); ctx.scale(Math.max(.3, e.nz), 1); ctx.rotate(-an); ctx.scale(1, open);   // it turns with the surface, flattens as it turns away, and shuts to blink
-      ctx.globalCompositeOperation = 'lighter'; let g = ctx.createRadialGradient(0, 0, r * .8, 0, 0, r * 1.7); g.addColorStop(0, rgbaF(.5)); g.addColorStop(1, rgbaF(0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, TAU); ctx.fill();
-      ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = r * .28; ctx.beginPath(); ctx.arc(0, 0, r * 1.1, 0, TAU); ctx.stroke(); ctx.strokeStyle = rgbaF(.5); ctx.lineWidth = dpr; ctx.beginPath(); ctx.arc(0, 0, r * 1.24, 0, TAU); ctx.stroke();   // the socket
-      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill(); g = ctx.createRadialGradient(0, 0, r * .5, 0, 0, r); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, rgbaF(.4)); ctx.fillStyle = g; ctx.fill();
-      for (let k = 0; k < 14; k++) { const a = rnd(k + e.ei * 31) * TAU, rr = (.35 + .55 * Math.sqrt(rnd(k * 3 + e.ei * 17))) * r, sz = (.5 + .7 * rnd(k * 9 + e.ei)) * dpr; ctx.fillStyle = `rgba(255,255,255,${.3 + .5 * rnd(k * 5 + e.ei)})`; ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, sz, sz); }
-      ctx.strokeStyle = rgbaF(1, 1.25); ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
-      if (r > 3 * dpr) { const sx = (st.look[0] * .34 - .12) * r, sy = (-st.look[1] * .3 - .14) * r, L = r * .3; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = dpr * .8; ctx.beginPath(); ctx.moveTo(sx - L, sy); ctx.lineTo(sx + L, sy); ctx.moveTo(sx, sy - L); ctx.lineTo(sx, sy + L); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(sx, sy, dpr * 1.1, 0, TAU); ctx.fill(); }
+    for (const e of eyes) { if (e.nz < .12 || e.r < 1.5 * dpr) continue; const r = e.r, open = 1 - .92 * e.blink, an = Math.atan2(-e.ny, e.nx), fl = Math.max(.3, e.nz), ox2 = e.nx * r * .36, oy2 = -e.ny * r * .36;
+      // The eye is a dome, not a disc: its base is an ellipse lying in the skin, and a ball stands out of it toward wherever it faces.
+      // Seen from the front the two coincide; as the head turns, the dome bulges past its base. It shuts to blink.
+      const shape = k => { ctx.beginPath(); ctx.ellipse(0, 0, r * fl * k, r * k, an, 0, TAU); ctx.moveTo(ox2 + r * .9 * k, oy2); ctx.arc(ox2, oy2, r * .9 * k, 0, TAU); };
+      ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, open);
+      ctx.globalCompositeOperation = 'lighter'; let g = ctx.createRadialGradient(ox2 * .5, oy2 * .5, r * .8, ox2 * .5, oy2 * .5, r * 1.8); g.addColorStop(0, rgbaF(.5)); g.addColorStop(1, rgbaF(0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox2 * .5, oy2 * .5, r * 1.8, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over'; shape(1.27); ctx.fillStyle = rgbaF(.5); ctx.fill(); shape(1.22); ctx.fillStyle = '#050506'; ctx.fill(); shape(1.05); ctx.fillStyle = rgbaF(1, 1.25); ctx.fill(); shape(.96); ctx.fillStyle = '#000'; ctx.fill();   // socket, bright rim, the void
+      ctx.save(); shape(.96); ctx.clip();
+      g = ctx.createRadialGradient(ox2, oy2, r * .4, ox2 * .6, oy2 * .6, r * 1.05); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, rgbaF(.5)); ctx.fillStyle = g; ctx.fillRect(-r * 1.6, -r * 1.6, r * 3.2, r * 3.2);   // colour gathers at the edge of the ball
+      for (let k = 0; k < 14; k++) { const a = rnd(k + e.ei * 31) * TAU, rr = (.35 + .5 * Math.sqrt(rnd(k * 3 + e.ei * 17))) * r, sz = (.5 + .7 * rnd(k * 9 + e.ei)) * dpr; ctx.fillStyle = `rgba(255,255,255,${.3 + .5 * rnd(k * 5 + e.ei)})`; ctx.fillRect(ox2 + Math.cos(a) * rr, oy2 + Math.sin(a) * rr, sz, sz); }
+      if (r > 3 * dpr) { const sx = ox2 + (st.look[0] * .3 - .1) * r, sy = oy2 + (-st.look[1] * .28 - .1) * r, L = r * .3; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = dpr * .8; ctx.beginPath(); ctx.moveTo(sx - L, sy); ctx.lineTo(sx + L, sy); ctx.moveTo(sx, sy - L); ctx.lineTo(sx, sy + L); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(sx, sy, dpr * 1.1, 0, TAU); ctx.fill(); }
+      g = ctx.createRadialGradient(ox2 - r * .32, oy2 - r * .36, 0, ox2 - r * .32, oy2 - r * .36, r * .85); g.addColorStop(0, 'rgba(255,255,255,.3)'); g.addColorStop(.5, 'rgba(255,255,255,.07)'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(-r * 1.6, -r * 1.6, r * 3.2, r * 3.2);   // light falling on glass, from the upper left
+      ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = r * .07; ctx.beginPath(); ctx.arc(ox2, oy2, r * .72, .2 * Math.PI, .62 * Math.PI); ctx.stroke();   // and coming back up from below
+      ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.ellipse(ox2 - r * .4, oy2 - r * .44, r * .17, r * .09, -.65, 0, TAU); ctx.fill(); ctx.restore();   // the glint
       ctx.restore(); }
     // read-outs, drawn on the screen itself so a recording carries them
     ctx.globalCompositeOperation = 'source-over'; const mono = (px, wt = 500) => `${wt} ${px * dpr}px "IBM Plex Mono", ui-monospace, monospace`, pad = 12 * dpr;
@@ -596,6 +602,7 @@ function create(canvas, opts) {
       const rrect = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
       const bh = es * dpr + 8 * dpr + hs + 4 * dpr;
       if (subStyle === 4) { rrect(cx - total * k / 2 - 14 * dpr, top - 9 * dpr, total * k + 28 * dpr, bh + 16 * dpr, 10 * dpr); ctx.shadowColor = glowOwn; ctx.shadowBlur = 14 * dpr; ctx.fillStyle = 'rgba(7,7,9,.84)'; ctx.fill(); ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.strokeStyle = `rgba(${C.feat},.8)`; ctx.lineWidth = dpr; ctx.stroke(); }
+      if (subStyle < 3) { rrect(cx - total * k / 2 - 6 * dpr, top - 2 * dpr, total * k + 12 * dpr, bh + 2 * dpr, 12 * dpr); ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = 26 * dpr; ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.fill(); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; }   // a soft patch of dark behind the words, so they stand off the creature
       let x = cx - total * k / 2;
       line.forEach((w, i) => { const nx = line[i + 1], on = now >= w.t0 - .04 && now < (nx ? nx.t0 - .04 : w.t1 + .25), mid = x + w.cw * k / 2, en = w.en.toLowerCase(), sy2 = top + es * dpr + 8 * dpr;
         const word = col => { ctx.fillStyle = col; ctx.font = mono(es * k, 600); ctx.fillText(en, mid, top); }, glyphs = col => { ctx.fillStyle = col; if (script) script.draw(ctx, w.w, mid - w.sw * k / 2, sy2, hs * k); else { ctx.font = `400 ${18 * k * dpr}px "Charis SIL", Georgia, serif`; ctx.fillText(w.w, mid, sy2); } };
