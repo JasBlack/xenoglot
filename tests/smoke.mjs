@@ -107,6 +107,8 @@ try {
   check((await m.evaluate(() => document.documentElement.scrollWidth)) <= 390, 'no sideways scroll on a phone');
   const folded = !(await m.isVisible('#libSel')); await m.tap('#langToggle');
   check(folded && await m.isVisible('#libSel'), 'on a phone the library is folded until asked for');
+  await m.tap('.steps a[data-v="words"]'); await m.waitForTimeout(300);
+  check(!(await m.isVisible('#libSel')), 'choosing a tab closes the library');
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 } finally { await browser.close(); server.close(); }
 process.exit(failed ? 1 : 0);

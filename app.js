@@ -1353,7 +1353,9 @@ if(!store.get('xenoglot-v1-seen')) $('#intro').hidden=false;
 const closeIntro=()=>{ $('#intro').hidden=true; store.set('xenoglot-v1-seen','1'); };
 $('#introClose').addEventListener('click',closeIntro);
 $('#introSpeak').addEventListener('click',()=>{ closeIntro(); location.hash='translate'; speakNow(); });
-$('#langToggle').addEventListener('click',e=>{ const open=$('.langpanel').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded',open); });
+const setLib=open=>{ $('.langpanel').classList.toggle('open',open); $('#langToggle').setAttribute('aria-expanded',open); };
+$('#langToggle').addEventListener('click',()=>setLib(!$('.langpanel').classList.contains('open')));
+$$('.steps a').forEach(a=>a.addEventListener('click',()=>setLib(false)));   // picking a tab closes the library, even the tab already open
 
 /* ---------- routing ---------- */
 const VIEWS=['translate','sounds','words','audio','script']; const visited=new Set();
@@ -1363,7 +1365,7 @@ function route(){ const v=VIEWS.includes(location.hash.slice(1))?location.hash.s
   visited.add(v); document.body.dataset.view=v;
   if(was && was!==v) window.scrollTo({top:0});
   if(v==='words') renderLex(); if(v==='script') renderGlyphs(); if(v==='translate') renderTranslate(); }
-window.addEventListener('hashchange',route);
+window.addEventListener('hashchange',()=>{ setLib(false); route(); });   // moving to another section closes the library; loading a language doesn't
 function renderAll(){ renderPalette(); renderAffixes(); renderTranslate(); route(); }
 
 /* ---------- theme ---------- */

@@ -24,7 +24,7 @@ A JAS.BLACK console tool for inventing spoken alien languages on English grammar
 ## Commands
 - Run: `python3 -m http.server 8000` → http://localhost:8000
 - Debug hooks: add `?debug` to the URL to get `window.__xg` (`getLang`, `setTrim`, `run`) for measuring levels.
-- Test: `npm install && npx playwright install chromium && npm test` (28 checks, including the downloads (.wav, .mp3, .otf, video), the length estimate and fit, the welcome, spoken numbers, the phone layout and the head). `npm run test:models` adds 13 checks with real models (every natural voice).
+- Test: `npm install && npx playwright install chromium && npm test` (29 checks, including the downloads (.wav, .mp3, .otf, video), the length estimate and fit, the welcome, spoken numbers, the phone layout and the head). `npm run test:models` adds 13 checks with real models (every natural voice).
 - On localhost only, `?hf=http://…/` makes the app fetch models from that address instead of huggingface.co (tests use it).
 
 ## Deployment
@@ -130,7 +130,7 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 
 ## First visit, phones, sharing (2.0.0)
 - No hash opens the translate step. `#intro` (inside the translate view) shows until `xenoglot-v1-seen` is set.
-- On phones `.langmore` is hidden until `#langToggle` adds `.open` to the language panel.
+- The library panel shows while `#langToggle` adds `.open` to it (`setLib`). Clicking any tab, or any hash change, closes it again.
 - `shareAudio` hands the .mp3 to `navigator.share` where files can be shared; the encoded file is kept so a second tap works if the first outlived the tap's permission.
 - Numbers in the English are read out (`numberWords`): "42" → "forty two", each word translated.
 
