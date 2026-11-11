@@ -408,7 +408,7 @@ function create(canvas, opts) {
   const m = { jaw: 0, lip: .1, round: 0, at: .5, tight: 0 }, F = [0, 500, 1500];
   const drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, idle: 0 }, ptr = { x: 0, y: 0, t: -99 };
   const pose = { yaw: 0, pitch: 0, roll: 0, zoom: 1 }, st = { blinks: [], look: [0, 0], breath: 0, perk: 0, widen: 0, think: 0, chatter: 0 };
-  const hist = new Float32Array(200); let hi = 0, histT = 0;
+  const hist = new Float32Array(200); let hi = 0, histT = 0, fmt = null, quality = 0, cost = 8, slowFor = 0, fastFor = 0;
   let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
 
   function setSeed(seed) { H = build(makeDNA(seed >>> 0)); st.blinks = H.eyes.map(() => 0); blinkAt = H.eyes.map(() => 1 + Math.random() * H.d.temper.blink); gest = null; nextGest = 2 + Math.random() * 3; }
@@ -470,9 +470,9 @@ function create(canvas, opts) {
   }
 
   function draw() {
-    const W = canvas.width, Hh = canvas.height, dpr = W / Math.max(1, canvas.clientWidth || W), C = H.col, WIREc = C.wire, d = H.d;
+    const W = canvas.width, Hh = canvas.height, dpr = fmt ? W / 360 : W / Math.max(1, canvas.clientWidth || W), C = H.col, WIREc = C.wire, d = H.d;
     ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0; ctx.fillStyle = '#060607'; ctx.fillRect(0, 0, W, Hh);
-    const short = Hh < 230 * dpr, hud = (short ? 30 : 70) * dpr, topPad = (short ? 10 : 30) * dpr, narrow = matchMedia("(max-width:850px)").matches && !short, low = H.body.top - H.body.h * (narrow ? .4 : .55), span = H.top - low, wide = Math.max(2 * H.reach + .3 + (d.fins || d.horns ? .5 : 0), H.body.w * 2.1) * (narrow ? .86 : 1);   // the body runs off the bottom
+    const short = Hh < 230 * dpr, hud = (short ? 30 : 70) * dpr, topPad = (short ? 10 : 30) * dpr, narrow = !fmt && matchMedia("(max-width:850px)").matches && !short, low = H.body.top - H.body.h * (narrow ? .4 : .55), span = H.top - low, wide = Math.max(2 * H.reach + .3 + (d.fins || d.horns ? .5 : 0), H.body.w * 2.1) * (narrow ? .86 : 1);   // the body runs off the bottom
     const scale = Math.min(W / wide, (Hh - hud - topPad) / (span * 1.02)) * pose.zoom, cx = W / 2, cy = topPad + (Hh - hud - topPad) * .5 + (H.top + low) / 2 * scale;
     const cyaw = Math.cos(pose.yaw), syaw = Math.sin(pose.yaw), cp = Math.cos(pose.pitch), sp = Math.sin(pose.pitch), cr = Math.cos(pose.roll), sr = Math.sin(pose.roll), cam = 4.6, pivot = -d.jawLen * .6;
     const buckets = {}, sketch = d.ink === 'sketch', boil = Math.floor(T * 7), rough = d.rough * dpr, hz = [], eyes = [], bones = { head: {}, back: {}, front: {} };
@@ -512,7 +512,7 @@ function create(canvas, opts) {
         for (let i = 0; i < f.length; i += 8) { ctx.moveTo(f[i], f[i + 1]); ctx.lineTo(f[i + 2], f[i + 3]); ctx.lineTo(f[i + 4], f[i + 5]); ctx.lineTo(f[i + 6], f[i + 7]); ctx.closePath(); }
         ctx.fillStyle = ctx.strokeStyle = col; ctx.fill(); ctx.lineWidth = dpr; ctx.stroke(); }
       return () => { const lv = [[], [], []];   // the stars go on last, over whatever lies under the skin
-        for (let s = 0; s < stars.length; s += 4) { const fi = stars[s] * NV, fj = stars[s + 1] * NT, i = Math.min(NV - 1, fi | 0), j = Math.min(NT - 1, fj | 0); if (!front[i * NT + j]) continue;
+        for (let s = 0; s < stars.length; s += quality ? 8 : 4) { const fi = stars[s] * NV, fj = stars[s + 1] * NT, i = Math.min(NV - 1, fi | 0), j = Math.min(NT - 1, fj | 0); if (!front[i * NT + j]) continue;
           const u = fj - j, v = fi - i, a = Q[i * M + j], b = Q[i * M + j + 1], c = Q[(i + 1) * M + j + 1], e = Q[(i + 1) * M + j], x0 = a[0] + (b[0] - a[0]) * u, y0 = a[1] + (b[1] - a[1]) * u, x1 = e[0] + (c[0] - e[0]) * u, y1 = e[1] + (c[1] - e[1]) * u;
           lv[Math.min(2, (stars[s + 2] - .45) / .55 * 3 | 0)].push(x0 + (x1 - x0) * v, y0 + (y1 - y0) * v, stars[s + 3] * dpr); }
         lv.forEach((L, k) => { ctx.fillStyle = `rgba(255,255,255,${.5 + .22 * k})`; ctx.beginPath(); for (let i = 0; i < L.length; i += 3) ctx.rect(L[i], L[i + 1], L[i + 2], L[i + 2]); ctx.fill(); }); }; };
@@ -531,7 +531,7 @@ function create(canvas, opts) {
     for (const key in buckets) { const [color, lvl, w] = key.split('|'), al = lvl / 6, seg = buckets[key], plain = color === WIREc;
       ctx.beginPath(); for (let i = 0; i < seg.length; i += 4) { ctx.moveTo(seg[i], seg[i + 1]); ctx.lineTo(seg[i + 2], seg[i + 3]); }
       if (plain) { ctx.strokeStyle = `rgba(239,232,216,${.1 + .5 * al})`; ctx.lineWidth = .7 * dpr; ctx.stroke(); continue; }   // the mesh, in cream ink
-      if (lvl >= 4) { ctx.strokeStyle = `rgba(${color},${al * .055})`; ctx.lineWidth = (11 + 3 * w) * dpr; ctx.stroke(); }   // bloom
+      if (lvl >= 4 && !quality) { ctx.strokeStyle = `rgba(${color},${al * .055})`; ctx.lineWidth = (11 + 3 * w) * dpr; ctx.stroke(); }   // bloom
       ctx.strokeStyle = `rgba(${color},${al * .22})`; ctx.lineWidth = (3.2 + 2 * w) * dpr; ctx.stroke();   // the glow
       ctx.strokeStyle = `rgba(${color},${al * .9})`; ctx.lineWidth = w * dpr; ctx.stroke(); }   // the trace
     /* ----- eyes: a black void set into the skin, faint stars round its edge, one bright star that looks where the creature looks ----- */
@@ -549,11 +549,21 @@ function create(canvas, opts) {
     ctx.globalCompositeOperation = 'source-over'; const mono = (px, wt = 500) => `${wt} ${px * dpr}px "IBM Plex Mono", ui-monospace, monospace`, pad = 12 * dpr;
     ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = mono(9, 600); ctx.fillStyle = 'rgba(146,147,153,1)';
     ctx.fillText((info.name || '').toUpperCase().split('').join(' '), pad, pad); ctx.font = mono(8); ctx.fillText('head ' + (d.seed >>> 0).toString(36).toUpperCase() + ' · ' + d.mood, pad, pad + 14 * dpr);
-    { const live = speech && amp > .03, R = (short ? 16 : 34) * dpr, ox = W - pad - R, oy = pad + R, N = hist.length, turns = 5.5, k = F[1] > 50 ? clamp(F[2] / F[1], 1.2, 6) : 3;   // the scope: the last few seconds of the voice wound into a spiral, newest at the rim
-      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.beginPath();
-      for (let i = 0; i < N; i++) { const u = i / (N - 1), h = hist[(hi + i) % N], a = u * turns * TAU - T * (live ? 2.2 : .5), r = R * (.06 + .94 * u) + R / turns * .44 * (.12 + .88 * h) * Math.sin(u * turns * TAU * k + T * 3), x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-      ctx.strokeStyle = `rgba(${C.feat},${live ? .16 : .07})`; ctx.lineWidth = 4.5 * dpr; ctx.stroke(); ctx.strokeStyle = `rgba(${C.feat},${live ? .95 : .4})`; ctx.lineWidth = dpr; ctx.stroke();
-      const ae = turns * TAU - T * (live ? 2.2 : .5); ctx.fillStyle = `rgba(${C.tract},${live ? 1 : .5})`; ctx.beginPath(); ctx.arc(ox + Math.cos(ae) * R, oy + Math.sin(ae) * R, 1.6 * dpr, 0, TAU); ctx.fill(); }   // the bright point writing the trace
+    { const live = speech && amp > .03, R = (short ? 7 : 12) * dpr, ox = W - pad - R * 1.9, oy = pad + R * 1.9, sg = d.seed % 997, N = hist.length, sp = live ? 1 : .35, a1 = live ? .95 : .4;
+      // the sigil: a small living mark, different for every creature. A spiral of the voice at its heart, a ring whose lobes
+      // drift from one count to another, arcs that open and close, and little marks in orbit that change shape as they go
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = .9 * dpr;
+      ctx.beginPath(); for (let i = 0; i < N; i += 2) { const u = i / (N - 1), h = hist[(hi + i) % N], a = u * 3 * TAU - T * 1.6 * sp, r = R * .5 * (.08 + .92 * u) * (1 + .5 * h * Math.sin(u * 40 + T * 4)), x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.strokeStyle = `rgba(${C.feat},${a1})`; ctx.stroke();
+      const m0 = 3 + sg % 4, ph = T * .13 + sg, mA = m0 + Math.floor(ph) % 3, mB = m0 + Math.floor(ph + 1) % 3, mx = smooth(ph - Math.floor(ph)), dep = .1 + .3 * amp;
+      ctx.beginPath(); for (let k = 0; k <= 72; k++) { const th = k / 72 * TAU, r = R * .86 * (1 + dep * lerp(Math.cos(mA * th), Math.cos(mB * th), mx)), a = th + T * .3 * sp, x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.strokeStyle = `rgba(${C.feat},${a1 * .7})`; ctx.stroke();
+      const nA = 2 + sg % 3; ctx.strokeStyle = `rgba(${C.tract},${a1 * .85})`;
+      for (let k = 0; k < nA; k++) { const a0 = k / nA * TAU - T * .5 * sp + sg, len = TAU / nA * (.3 + .35 * (.5 + .5 * Math.sin(T * .7 + k * 2.1))); ctx.beginPath(); ctx.arc(ox, oy, R * 1.28, a0, a0 + len); ctx.stroke(); }
+      const nS = 3 + sg % 3; ctx.fillStyle = ctx.strokeStyle = `rgba(${C.brain},${a1})`;
+      for (let k = 0; k < nS; k++) { const a = k / nS * TAU + T * .22 * sp * (k % 2 ? 1 : -1.4) + sg, rr = R * (1.62 + .1 * Math.sin(T + k)), x = ox + Math.cos(a) * rr, y = oy + Math.sin(a) * rr, kind = Math.floor(T * .25 + k * 1.7 + sg) % 4, z = (1.5 + 1.4 * amp) * dpr; ctx.beginPath();
+        if (kind === 0) { ctx.arc(x, y, z * .6, 0, TAU); ctx.fill(); } else if (kind === 1) { for (let q = 0; q < 3; q++) { const b = a + q * TAU / 3; q ? ctx.lineTo(x + Math.cos(b) * z, y + Math.sin(b) * z) : ctx.moveTo(x + Math.cos(b) * z, y + Math.sin(b) * z); } ctx.closePath(); ctx.stroke(); }
+        else if (kind === 2) { ctx.moveTo(x - z, y); ctx.lineTo(x + z, y); ctx.moveTo(x, y - z); ctx.lineTo(x, y + z); ctx.stroke(); } else { ctx.arc(x, y, z, 0, TAU); ctx.stroke(); } } }
     const sy = Hh - 22 * dpr, sh = 16 * dpr;   // the scope: loudness of the speech, with a playhead; a breath trace at rest
     if (env && speech) { const now = speech.clock(), n = env.length; ctx.beginPath();
       for (let x = 0; x <= W - 2 * pad; x += 2 * dpr) { const i = Math.floor(x / (W - 2 * pad) * n), v = env[i] || 0; ctx.moveTo(pad + x, sy - v * sh * .5); ctx.lineTo(pad + x, sy + v * sh * .5 + dpr); }
@@ -576,16 +586,19 @@ function create(canvas, opts) {
         x += (c.cw + gap) * k; }); }
   }
 
-  function fit() { const dpr = 2, w = Math.round((canvas.clientWidth || 320) * dpr), h = Math.round((canvas.clientHeight || 400) * dpr);   /* always 2×: fine lines stay crisp, recordings are about 688 × 960 */
+  function fit() { const dpr = [2, 1.5, 1.25][quality], w = fmt ? fmt[0] : Math.round((canvas.clientWidth || 320) * dpr), h = fmt ? fmt[1] : Math.round((canvas.clientHeight || 400) * dpr);   /* 2× where the machine keeps up; a fixed frame while a video records */
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; ctx.fillStyle = '#0b0b0c'; ctx.fillRect(0, 0, w, h); } }
-  function tick(now) { const dt = Math.min(.05, (now - last) / 1000); last = now; fit(); step(dt); draw(); requestAnimationFrame(tick); }
+  function tick(now) { const dt = Math.min(.05, (now - last) / 1000); last = now; fit(); const t0 = performance.now(); step(dt); draw();
+    cost += (performance.now() - t0 - cost) * .05; slowFor = cost > 24 ? slowFor + dt : 0; fastFor = cost < 7 ? fastFor + dt : 0;   // how long a frame takes to draw, smoothed
+    if (slowFor > 1.5 && quality < 2) { quality++; slowFor = 0; cost *= .6; } else if (fastFor > 8 && quality > 0) { quality--; fastFor = 0; }
+    requestAnimationFrame(tick); }
   canvas.addEventListener('pointerdown', e => { drag.on = true; drag.x = e.clientX; drag.y = e.clientY; drag.idle = 0; canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener('pointermove', e => { if (!drag.on) return; drag.yaw = clamp(drag.yaw + (e.clientX - drag.x) * .012, -2.6, 2.6); drag.pitch = clamp(drag.pitch + (e.clientY - drag.y) * .008, -.7, .7); drag.x = e.clientX; drag.y = e.clientY; });
   const up = () => { drag.on = false; drag.idle = 0; }; canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   window.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); if (!r.width) return;   // it watches the pointer
     ptr.x = clamp((e.clientX - (r.left + r.width / 2)) / Math.max(260, innerWidth * .45), -1, 1); ptr.y = clamp((e.clientY - (r.top + r.height / 2)) / Math.max(260, innerHeight * .5), -1, 1); ptr.t = T; }, { passive: true });
   setSeed(1); requestAnimationFrame(tick);
-  return { setSeed, setInfo: i => { info = { ...info, ...i }; }, speak, stop, dna: () => H.d, isSpeaking: () => !!speech };
+  return { setFormat: f => { fmt = f && f[0] > 0 ? [f[0] | 0, f[1] | 0] : null; }, quality: () => quality, setSeed, setInfo: i => { info = { ...info, ...i }; }, speak, stop, dna: () => H.d, isSpeaking: () => !!speech };
 }
 window.XenoHead = { create, makeDNA };
 })();

@@ -57,6 +57,17 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Natural voices: `wordIpa` puts `ˈ` where the accent stresses and `ː` after long vowels; `tempo` goes into `length_scale`; `melodyCurve` bends each phrase's pitch with a detune curve on the clip (skipped while fitting a length). The voice's own intonation is still underneath.
 - The voice section shows it in words (`renderAccent`) with a **new accent** key.
 
+## 2.5.0: phones, voices, characters, video, speed
+- Opening the page: unless the current language is one the person changed, a new random language, creature and voice character is made each time (`L.auto = 1`). `saveLang()` (every user edit) removes the flag; the previous untouched auto language is deleted at the next open. Velnari (`DEFAULT`) is now only the fallback shape for `normaliseLang`.
+- Audio on phones: `unlockAudio()` runs on every pointerdown/touchend/keydown/click (capture): resumes the context, plays a one-sample buffer, sets `navigator.audioSession.type = 'playback'` where it exists, and on iOS keeps a silent looping `<audio>` playing so the ringer switch doesn't mute Web Audio. Not tested on a real phone.
+- Voice names are abstract: `origin` (the synth), quick Piper voices `clarity gravity patience grace haste`, lifelike Kokoro voices `wonder + resolve + reverie + valour + devotion + longing +`. `NATURAL[id].about` says what each was trained on and is the chip's tooltip. The speak section shows `#voiceNudge` while the voice is `origin`; its key switches to a quick voice (one already cached if any).
+- Characters: 23 presets. Growl (amplitude shaken at half the pitch) and breath (band-passed hiss under each clip) now also apply to recorded voices in `naturalFx`, so every character works with every voice. Recordings of your own voice remain origin-only.
+- A cached recorded voice starts loading at boot (`piperVoice` after `checkVoiceCache`). `#vTry` says it is making the sample.
+- Alphabet styles: 23 (new: constellation, cuneiform, ogham, rings, braille, seismic, petals, crescent, fork). The style list is open by default. `mixed` draws from all of them.
+- Video: `#vFmt` picks 9:16 or 4:5 (`xenoglot-v1-vfmt`). `head.setFormat([w, h])` fixes the canvas pixel size while recording (720 wide on phones and machines with 4 cores or fewer, else 1080); CSS `object-fit: contain` keeps it undistorted on screen, and `draw()` lays out for a 360 px wide design. Still MediaRecorder: .mp4 where the browser can, else .webm with a note.
+- Head speed: `tick()` times `step + draw`; over 24 ms for 1.5 s lowers `quality` (0–2): canvas scale 2 → 1.5 → 1.25, no bloom pass, half the stars. Under 7 ms for 8 s raises it again.
+- Sigil: the spiral scope became a small mark at the top right: voice spiral at the centre, a ring whose lobe count drifts, arcs opening and closing, and orbiting marks that change shape; counts come from the head seed.
+
 ## Word shapes (1.2.0)
 - `FREQ` weights every sound by how common it is across languages, times a per-language factor from the seed (`langWeights`), so each language has favourite sounds.
 - `CODA` lists the sounds allowed to end a syllable, weighted. Clicks never end one.

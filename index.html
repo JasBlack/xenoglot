@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="2.4.1">
+<body data-ui="dark" data-tool="xenoglot" data-version="2.5.0">
 <header class="topbar">
   <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
   <nav class="steps" aria-label="Sections">
@@ -59,8 +59,9 @@
     <div class="headkeys">
       <button type="button" class="key" id="btnRandom" title="Invent a new language for this creature: new sounds, words, accent and script (N)">&#x2726; new language</button>
       <button type="button" class="key" id="headNew" title="A different head and voice, speaking the same language">&#x2726; new creature</button>
-      <button type="button" class="key ink" id="headVideo" title="Record the head speaking, with sound, as a video file"><span class="dot"></span> video</button>
+      <button type="button" class="key ink" id="headVideo" title="Record the creature speaking, with sound, as a video for social media"><span class="dot"></span> video</button>
     </div>
+    <div class="vfmt"><span>video shape</span><div class="chips" id="vFmt" role="group" aria-label="Video shape"><button type="button" class="chip" data-v="9:16" title="Stories, Reels, TikTok">9:16</button><button type="button" class="chip" data-v="4:5" title="Instagram feed">4:5</button></div></div>
     <button type="button" class="key primary wide" id="headShare" hidden title="Send the video with WhatsApp, messages or any app">share video</button>
     <div class="lcd" id="headStatus"></div>
     <div class="lcd lg-only"><span id="statusLine">ready</span></div>
@@ -89,6 +90,7 @@
     <h2><span>english</span><span>type what it should say</span></h2>
     <textarea id="enText" aria-label="English text"></textarea>
     <div class="lcd" id="tEst"></div>
+    <div class="nudge" id="voiceNudge"><span>this is <b>origin</b>, the instant synthetic voice. a recorded voice sounds far more real.</span><button type="button" class="key" id="nudgeTry" title="Switch to a quick recorded voice. A 63 MB download the first time.">try a real voice</button><a class="key" href="#sounds">all voices</a></div>
     <details class="more" id="tOpts"><summary>options</summary>
       <div class="sub" style="gap:10px">
         <div class="fitrow">
@@ -123,7 +125,7 @@
   <div class="panel">
     <h2><span>voice</span><span>who is speaking</span></h2>
     <div class="chips" id="vEngine" role="group" aria-label="Voice"></div>
-    <p class="hint"><b>built-in</b> is instant and the most alien. The others are real recorded voices, each from a different language, so each gives your language a different mouth. They download once (63 MB each; the ones marked + share one 92 MB download, sound the most lifelike and take longer to speak).</p>
+    <p class="hint"><b>origin</b> is the built-in synthesizer: instant and the most alien, but the least real. The others are recorded human voices reading the creature's sounds. Each was trained on a different human language, so each gives a different accent. <b>clarity, gravity, patience, grace</b> and <b>haste</b> are quick: a few seconds for a paragraph (63 MB each). The ones marked <b>+</b> sound the most lifelike and are slow: they take about as long to make as the speech lasts (one 92 MB download shared by all six). Each downloads once, then works offline. Every character below works with every voice. Hover a name to see what it was trained on.</p>
     <div class="lcd" id="engineStatus"></div>
     <div class="label">character</div>
     <div class="chips" id="vPreset" role="group" aria-label="Voice character"></div>
@@ -133,9 +135,9 @@
         <div class="control"><label class="control-top" for="vPitch"><span>pitch</span><em id="oPitch"></em></label><input id="vPitch" type="range" min="45" max="400" step="1"></div>
         <div class="control"><label class="control-top" for="vSpeed"><span>speed</span><em id="oSpeed"></em></label><input id="vSpeed" type="range" min="0.5" max="1.8" step="0.05"></div>
         <div class="control"><label class="control-top" for="vFormant"><span>throat size</span><em id="oFormant"></em></label><input id="vFormant" type="range" min="0.6" max="1.7" step="0.01"></div>
-        <div class="control synth-only"><label class="control-top" for="vBreath"><span>breathiness</span><em id="oBreath"></em></label><input id="vBreath" type="range" min="0" max="1" step="0.01"></div>
+        <div class="control"><label class="control-top" for="vBreath"><span>breathiness</span><em id="oBreath"></em></label><input id="vBreath" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vJitter"><span>roughness</span><em id="oJitter"></em></label><input id="vJitter" type="range" min="0" max="1" step="0.01"></div>
-        <div class="control synth-only"><label class="control-top" for="vGrowl"><span>growl</span><em id="oGrowl"></em></label><input id="vGrowl" type="range" min="0" max="1" step="0.01"></div>
+        <div class="control"><label class="control-top" for="vGrowl"><span>growl</span><em id="oGrowl"></em></label><input id="vGrowl" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vChoir"><span>many voices</span><em id="oChoir"></em></label><input id="vChoir" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vRing"><span>metallic</span><em id="oRing"></em></label><input id="vRing" type="range" min="0" max="1" step="0.01"></div>
         <div class="control"><label class="control-top" for="vVib"><span>warble</span><em id="oVib"></em></label><input id="vVib" type="range" min="0" max="1" step="0.01"></div>
@@ -241,7 +243,7 @@
     <h2><span>alphabet</span><span class="gid" id="gId"></span></h2>
     <div class="kgrid"><button type="button" class="key primary tall" id="gRegenAll">&#x2726; new alphabet</button><button type="button" class="key tall" id="gSurprise">new style too</button></div>
     <div class="glyphs" id="glyphs"></div>
-    <details class="more"><summary>style, pen and weirdness</summary>
+    <details class="more" open><summary>style, pen and weirdness</summary>
       <div class="sub" style="gap:12px">
         <div class="label">style</div>
         <div class="chips" id="gStyle" role="group" aria-label="Style"></div>

@@ -52,12 +52,15 @@ try {
   const made = await p.textContent('#tStatus');
   check(/≈ .+ of speech · ready in about/.test(est) && est.match(/≈ ([\d.]+) s/)?.[1] === made.match(/^([\d.]+) s/)?.[1], 'length estimate matches the built-in voice');
   await open('#tOpts'); await p.click('label:has(#fitOn)');
-  await p.fill('#fitSecs', '8'); await p.dispatchEvent('#fitSecs', 'input');
+  // the language is a new random one on every open, so ask for a length from the middle of what the slider offers
+  const want = await p.$eval('#fitSecs', el => String(Math.round((+el.min + +el.max) / 2 * 2) / 2));
+  await p.fill('#fitSecs', want); await p.dispatchEvent('#fitSecs', 'input');
   await p.evaluate(() => { document.querySelector('#tStatus').textContent = ''; });
   await p.click('#tSpeak');
   await p.waitForFunction(() => /of speech/.test(document.querySelector('#tStatus').textContent), null, { timeout: 20000 });
   await stop();
-  check(/^8\.0 s of speech \(asked for 8\.0 s\)/.test(await p.textContent('#tStatus')), 'fit to a length lands 8 s exactly');
+  const fitMsg = await p.textContent('#tStatus'), fitNums = fitMsg.match(/^([\d.]+) s of speech \(asked for ([\d.]+) s\)/);
+  check(!!fitNums && fitNums[1] === fitNums[2] && Math.abs(+fitNums[2] - +want) <= .5, `fit to a length lands on the length asked for (${want} s): ` + fitMsg);
   await p.click('label:has(#fitOn)');
   await open('#tMore');
   const [audio] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveAudio')]);

@@ -105,6 +105,18 @@ const PRESETS = {
   'Machine oracle':     {pitch:110,speed:.95,formant:1.05,breath:0,jitter:0,growl:0,choir:.3,ring:.75,vib:0,space:.45},
   'Ethereal':           {pitch:240,speed:.85,formant:1.3,breath:.5,jitter:.2,growl:0,choir:.6,ring:0,vib:.3,space:.95},
   'Insectoid':          {pitch:390,speed:1.6,formant:1.7,breath:.1,jitter:.8,growl:.3,choir:.4,ring:.35,vib:.9,space:.1},
+  'Deep ocean':         {pitch:70,speed:.72,formant:.74,breath:.35,jitter:.3,growl:.15,choir:.25,ring:0,vib:.2,space:1},
+  'Glass child':        {pitch:300,speed:1.05,formant:1.45,breath:.15,jitter:.15,growl:0,choir:.15,ring:.28,vib:.2,space:.5},
+  'Old radio':          {pitch:140,speed:1.05,formant:1.2,breath:.05,jitter:.7,growl:.2,choir:0,ring:.45,vib:.05,space:.05},
+  'Swarm queen':        {pitch:260,speed:1.25,formant:1.4,breath:.2,jitter:.9,growl:.45,choir:1,ring:.2,vib:.7,space:.3},
+  'Stone elder':        {pitch:66,speed:.68,formant:.7,breath:.5,jitter:.85,growl:.6,choir:0,ring:0,vib:.05,space:.7},
+  'Wind spirit':        {pitch:210,speed:.8,formant:1.35,breath:.95,jitter:.2,growl:0,choir:.5,ring:0,vib:.5,space:1},
+  'Cathedral':          {pitch:120,speed:.82,formant:.95,breath:.25,jitter:.25,growl:0,choir:.85,ring:0,vib:.2,space:1},
+  'Broken machine':     {pitch:95,speed:1.15,formant:.9,breath:0,jitter:1,growl:.5,choir:.2,ring:.9,vib:.6,space:.2},
+  'Chittering':         {pitch:340,speed:1.75,formant:1.55,breath:.3,jitter:1,growl:.15,choir:.2,ring:.1,vib:1,space:.05},
+  'Dream voice':        {pitch:185,speed:.78,formant:1.1,breath:.6,jitter:.1,growl:0,choir:.7,ring:.12,vib:.4,space:.85},
+  'Throat singer':      {pitch:88,speed:.85,formant:.82,breath:.2,jitter:.5,growl:.75,choir:.5,ring:.15,vib:.3,space:.45},
+  'Little bell':        {pitch:360,speed:1.1,formant:1.65,breath:.1,jitter:.1,growl:0,choir:0,ring:.5,vib:.3,space:.6},
 };
 let L = structuredClone(DEFAULT);
 let recs = {}; // key -> {buf, b64}
@@ -214,7 +226,21 @@ const toKeys = w => [...w.toLowerCase()].filter(k => PM[k]);
 const ipaOf = w => toKeys(w).map(k => PM[k].ipa).join('');
 
 /* ---------- speech synth ---------- */
-let actx=null; function getCtx(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); if (actx.state==='suspended') actx.resume(); return actx; }
+let actx=null; function getCtx(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); if (actx.state!=='running') actx.resume().catch(()=>{}); return actx; }
+// Phones only let a page make sound from inside a tap, and an iPhone with its ringer switch off mutes Web Audio altogether.
+// So every tap or key press wakes the audio engine, and on iOS a silent <audio> element is kept playing, which moves the page
+// into the "playback" category that the ringer switch doesn't mute.
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
+let silentEl=null, unlocked=false;
+function silentWav(){ const n=2000, b=new Uint8Array(44+n), v=new DataView(b.buffer), w=(o,t)=>[...t].forEach((c,i)=>b[o+i]=c.charCodeAt(0));
+  w(0,'RIFF'); v.setUint32(4,36+n,true); w(8,'WAVEfmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,8000,true); v.setUint32(28,8000,true); v.setUint16(32,1,true); v.setUint16(34,8,true); w(36,'data'); v.setUint32(40,n,true); b.fill(128,44);
+  return URL.createObjectURL(new Blob([b],{type:'audio/wav'})); }
+function unlockAudio(){ let c; try{ c=getCtx(); }catch(e){ return; }
+  try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
+  if(IOS){ if(!silentEl){ silentEl=new Audio(silentWav()); silentEl.loop=true; silentEl.setAttribute('playsinline',''); } if(silentEl.paused) silentEl.play().catch(()=>{}); }
+  if(!unlocked){ try{ const s0=c.createBufferSource(); s0.buffer=c.createBuffer(1,1,c.sampleRate); s0.connect(c.destination); s0.start(0); unlocked=c.state==='running'; }catch(e){} } }
+['pointerdown','touchend','keydown','click'].forEach(ev=>document.addEventListener(ev,unlockAudio,{capture:true,passive:true}));
+document.addEventListener('visibilitychange',()=>{ if(silentEl){ if(document.hidden) silentEl.pause(); else if(unlocked) silentEl.play().catch(()=>{}); } });
 function baseDur(p, stressed){ return p.t==='V' ? (stressed?.165:.1) : p.t==='stop' ? .09 : p.t==='click' ? .07 : p.t==='glottal' ? .07 : p.t==='fric' ? .1 : p.t==='trill' ? .1 : .07; }
 // word list -> segments. words: [{al, end:'.'|','|'?'|'' }]
 function wordsToSegs(words, voice, t0=0.12){
@@ -396,17 +422,17 @@ const PIPER=HF+'rhasspy/piper-voices/resolve/main/', KMODEL=KOKORO+'onnx/model_q
 // Voices trained on other languages speak the same sounds with a different mouth: the cheapest way to stop every language sounding English.
 // quick = Piper (one 63 MB file each). lifelike = Kokoro (one 92 MB model shared by all, plus half a megabyte per voice), slower to make.
 const NATURAL={
-  kristin:{kind:'piper', label:'american woman', url:PIPER+'en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
-  norman:{kind:'piper', label:'american man', url:PIPER+'en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
-  harri:{kind:'piper', label:'finnish man', url:PIPER+'fi/fi_FI/harri/medium/fi_FI-harri-medium', pitch:105, mb:63},
-  anna:{kind:'piper', label:'hungarian woman', url:PIPER+'hu/hu_HU/anna/medium/hu_HU-anna-medium', pitch:200, mb:63},
-  vais:{kind:'piper', label:'vietnamese woman', url:PIPER+'vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium', pitch:230, mb:63, len:1.35}   /* this voice rushes sounds it doesn't know, so it is slowed */,
-  heart:{kind:'kokoro', label:'american woman +', model:KMODEL, style:KOKORO+'voices/af_heart.bin', pitch:205, mb:92},
-  michael:{kind:'kokoro', label:'american man +', model:KMODEL, style:KOKORO+'voices/am_michael.bin', pitch:115, mb:92},
-  alpha:{kind:'kokoro', label:'japanese woman +', model:KMODEL, style:KOKORO+'voices/jf_alpha.bin', pitch:230, mb:92},
-  yunjian:{kind:'kokoro', label:'mandarin man +', model:KMODEL, style:KOKORO+'voices/zm_yunjian.bin', pitch:120, mb:92},
-  hindi:{kind:'kokoro', label:'hindi woman +', model:KMODEL, style:KOKORO+'voices/hf_alpha.bin', pitch:210, mb:92},
-  nicola:{kind:'kokoro', label:'italian man +', model:KMODEL, style:KOKORO+'voices/im_nicola.bin', pitch:120, mb:92},
+  kristin:{kind:'piper', label:'clarity', about:'quick · trained on an American woman', url:PIPER+'en/en_US/kristin/medium/en_US-kristin-medium', pitch:195, mb:63},
+  norman:{kind:'piper', label:'gravity', about:'quick · trained on an American man', url:PIPER+'en/en_US/norman/medium/en_US-norman-medium', pitch:110, mb:63},
+  harri:{kind:'piper', label:'patience', about:'quick · trained on a Finnish man', url:PIPER+'fi/fi_FI/harri/medium/fi_FI-harri-medium', pitch:105, mb:63},
+  anna:{kind:'piper', label:'grace', about:'quick · trained on a Hungarian woman', url:PIPER+'hu/hu_HU/anna/medium/hu_HU-anna-medium', pitch:200, mb:63},
+  vais:{kind:'piper', label:'haste', about:'quick · trained on a Vietnamese woman', url:PIPER+'vi/vi_VN/vais1000/medium/vi_VN-vais1000-medium', pitch:230, mb:63, len:1.35},   /* this voice rushes sounds it doesn't know, so it is slowed */
+  heart:{kind:'kokoro', label:'wonder +', about:'lifelike, slow · American woman', model:KMODEL, style:KOKORO+'voices/af_heart.bin', pitch:205, mb:92},
+  michael:{kind:'kokoro', label:'resolve +', about:'lifelike, slow · American man', model:KMODEL, style:KOKORO+'voices/am_michael.bin', pitch:115, mb:92},
+  alpha:{kind:'kokoro', label:'reverie +', about:'lifelike, slow · Japanese woman', model:KMODEL, style:KOKORO+'voices/jf_alpha.bin', pitch:230, mb:92},
+  yunjian:{kind:'kokoro', label:'valour +', about:'lifelike, slow · Mandarin man', model:KMODEL, style:KOKORO+'voices/zm_yunjian.bin', pitch:120, mb:92},
+  hindi:{kind:'kokoro', label:'devotion +', about:'lifelike, slow · Hindi woman', model:KMODEL, style:KOKORO+'voices/hf_alpha.bin', pitch:210, mb:92},
+  nicola:{kind:'kokoro', label:'longing +', about:'lifelike, slow · Italian man', model:KMODEL, style:KOKORO+'voices/im_nicola.bin', pitch:120, mb:92},
 };
 const modelUrl=v=>v.kind==='kokoro' ? v.model : v.url+'.onnx';
 // Kokoro's sound set lacks three of Xenoglot's: g is written ɡ there; ɬ and the click get their nearest neighbours
@@ -519,9 +545,16 @@ async function naturalFx(clips, srIn, voice, rate, dur, extra={}){
       const lg=ctx.createGain(); lg.gain.value=voice.vib*45; lfo.connect(lg).connect(s.detune); const g=ctx.createGain(); g.gain.value=gain; s.connect(g).connect(mix); s.start(c.t+delay); };
     voiceSrc(0,1,0);
     if(voice.choir>0){ voiceSrc(6+voice.choir*6, voice.choir*.7, .012); voiceSrc(-(7+voice.choir*6), voice.choir*.7, .021); } }
-  const dry=ctx.createGain(); dry.gain.value=1-voice.ring*.85; mix.connect(dry).connect(out);
+  // growl: the voice is shaken at half its pitch, like a second, rougher set of vocal folds
+  let src=mix; if(voice.growl>0){ const gm=ctx.createGain(); gm.gain.value=1-voice.growl*.4; const go=ctx.createOscillator(); go.type='sawtooth'; go.frequency.value=Math.max(24,voice.pitch*.5); const gd=ctx.createGain(); gd.gain.value=voice.growl*.4; go.connect(gd).connect(gm.gain); go.start(0); mix.connect(gm); src=gm; }
+  // breath: hiss laid under each phrase
+  if(voice.breath>.05){ const nb=ctx.createBuffer(1,sr,sr), nd=nb.getChannelData(0); for(let i=0;i<sr;i++) nd[i]=Math.random()*2-1; const ns=ctx.createBufferSource(); ns.buffer=nb; ns.loop=true;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200*voice.formant; bp.Q.value=.6; const ng=ctx.createGain(); ng.gain.value=0;
+    for(const c of clips){ const cd=c.raw.length/srIn/(rate*(c.squeeze||1)); ng.gain.setValueAtTime(0,c.t); ng.gain.linearRampToValueAtTime(voice.breath*.07,c.t+.06); ng.gain.setValueAtTime(voice.breath*.07,Math.max(c.t+.07,c.t+cd-.08)); ng.gain.linearRampToValueAtTime(0,c.t+cd); }
+    ns.connect(bp).connect(ng).connect(out); ns.start(0); }
+  const dry=ctx.createGain(); dry.gain.value=1-voice.ring*.85; src.connect(dry).connect(out);
   if(voice.ring>0){ const ring=ctx.createGain(); ring.gain.value=0; const ro=ctx.createOscillator(); ro.frequency.value=40+voice.formant*35; ro.connect(ring.gain); ro.start(0);
-    const wet=ctx.createGain(); wet.gain.value=voice.ring*1.5; mix.connect(ring).connect(wet).connect(out); }
+    const wet=ctx.createGain(); wet.gain.value=voice.ring*1.5; src.connect(ring).connect(wet).connect(out); }
   if(voice.space>0){ const len=Math.ceil(sr*(.25+voice.space*1.5)), ir=ctx.createBuffer(1,len,sr), d=ir.getChannelData(0); let lp=0;
     for(let i=0;i<len;i++){ lp=lp*.6+(Math.random()*2-1)*.4; d[i]=lp*Math.pow(1-i/len,2.2+(1-voice.space)*2); }
     const cv=ctx.createConvolver(); cv.buffer=ir; const wg=ctx.createGain(); wg.gain.value=voice.space*.55; out.connect(cv).connect(wg).connect(ctx.destination); }
@@ -534,7 +567,7 @@ async function naturalFx(clips, srIn, voice, rate, dur, extra={}){
 async function speakWords(words, speedMul=1, fitting=false){
   const voice={...L.voice, speed:L.voice.speed*speedMul, fitting};
   if(L.engine && NATURAL[L.engine]){
-    if(Object.keys(recs).length && !speakWords.warned){ speakWords.warned=true; toast('The natural voice doesn’t use your recordings. Pick built-in to hear them.'); }
+    if(Object.keys(recs).length && !speakWords.warned){ speakWords.warned=true; toast('Recorded voices don’t use your own recordings. Pick origin to hear them.'); }
     const led=$('#ledVoice'); led&&led.classList.add('on');
     try{ return await speakNatural(words, voice); }
     catch(e){ toast(e.message||'The natural voice failed, so the built-in voice is speaking.'); }
@@ -650,7 +683,7 @@ function saveRecs(){ const o={}; for(const k in recs) o[k]=recs[k].b64; const ke
 async function loadRecs(obj){ recs={}; for(const k in obj||{}){ try{ recs[k]={buf:await decodeClip(b64dec(obj[k])), b64:obj[k]}; }catch(e){} } }
 
 /* ---------- glyphs ---------- */
-const STYLES={angular:'Angular grid',round:'Flowing curves',runic:'Runic stems',dotted:'Dotted',circuit:'Circuit board',tendril:'Tendrils',orbital:'Orbits',shard:'Shards',hanging:'Hanging from a line',insect:'Insect bodies',knot:'Knots',glitch:'Glitch blocks',bloom:'Spirals',mixed:'Chaos: every letter its own style'};
+const STYLES={angular:'Angular grid',round:'Flowing curves',runic:'Runic stems',dotted:'Dotted',circuit:'Circuit board',tendril:'Tendrils',orbital:'Orbits',shard:'Shards',hanging:'Hanging from a line',insect:'Insect bodies',knot:'Knots',glitch:'Glitch blocks',bloom:'Spirals',constellation:'Constellations',cuneiform:'Wedges',ogham:'Notched spine',rings:'Broken rings',braille:'Dot matrix',seismic:'Seismograph',petals:'Petals',crescent:'Crescents',fork:'Branching',mixed:'Chaos: every letter its own style'};
 const SKEYS=Object.keys(STYLES).filter(k=>k!=='mixed');
 function chaikin(pts,it=3){ for(let n=0;n<it;n++){ const o=[pts[0]]; for(let i=0;i<pts.length-1;i++){ const [a,b]=[pts[i],pts[i+1]]; o.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75]); } o.push(pts[pts.length-1]); pts=o; } return pts; }
 function bow(a,b,amt){ const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2, dx=b[0]-a[0], dy=b[1]-a[1], l=Math.hypot(dx,dy)||1; const c=[mx-dy/l*amt, my+dx/l*amt]; const o=[]; for(let i=0;i<=10;i++){ const t=i/10; o.push([(1-t)*(1-t)*a[0]+2*(1-t)*t*c[0]+t*t*b[0],(1-t)*(1-t)*a[1]+2*(1-t)*t*c[1]+t*t*b[1]]); } return o; }
@@ -699,6 +732,33 @@ const GEN={
   bloom(r,D,w){ const S=[]; const n=1+Math.floor(r()*(1.3+w)); for(let i=0;i<n;i++){ const cx=30+r()*40, cy=30+r()*40, turns=1.2+r()*(1.5+w*2), dir=r()<.5?1:-1, R=18+r()*20, a0=r()*Math.PI*2, m=Math.round(turns*28); const pts=[];
       for(let j=0;j<=m;j++){ const t=j/m, a=a0+dir*t*turns*Math.PI*2, rad=2+R*t; pts.push([cx+Math.cos(a)*rad*D.aspect,cy+Math.sin(a)*rad]); }
       const e=pts[pts.length-1]; if(r()<.6) pts.push([e[0]+(r()-.5)*30,Math.min(94,e[1]+15+r()*20)]); S.push(pts); } return S; },
+  // stars joined by lines
+  constellation(r,D,w){ const n=3+Math.floor(r()*(3+w*3)), P=[]; for(let i=0;i<n;i++) P.push([10+r()*80,8+r()*84]); const S=P.map(p=>[p]); for(let i=1;i<n;i++) if(r()<.8) S.push([P[i-1],P[i]]); if(n>3&&r()<.4) S.push([P[0],P[n-1]]); return S; },
+  // wedges pressed into clay: a stroke with a head
+  cuneiform(r,D,w){ const S=[], n=2+Math.floor(r()*(3+w*3)); for(let i=0;i<n;i++){ const x=14+r()*72, y=10+r()*60, a=pick(r,[Math.PI/2,Math.PI/2,0,Math.PI/4,3*Math.PI/4]), L=16+r()*26, c=Math.cos(a), sn=Math.sin(a);
+      S.push([[x,y],[Math.max(6,Math.min(94,x+c*L)),Math.max(6,Math.min(94,y+sn*L))]]); S.push([[x-sn*7-c*3,y+c*7-sn*3],[x,y],[x+sn*7-c*3,y-c*7-sn*3]]); } return S; },
+  // a spine with groups of notches: left, right or right across
+  ogham(r,D,w){ const x=50+(r()-.5)*16, S=[[[x,4],[x,96]]], groups=1+Math.floor(r()*(2+w*2)); for(let g=0;g<groups;g++){ const y0=12+r()*62, n=1+Math.floor(r()*4), side=pick(r,[-1,1,0]), tilt=(r()-.5)*14, len=14+r()*18;
+      for(let i=0;i<n;i++){ const y=Math.min(92,y0+i*7); S.push(side ? [[x,y],[x+side*len,y+tilt]] : [[x-len*.7,y-tilt*.5],[x+len*.7,y+tilt*.5]]); } }
+    if(r()<.3) S.push([[x+(r()<.5?-18:18),8+r()*84]]); return S; },
+  // rings with gaps, and marks riding on them
+  rings(r,D,w){ const cx=50, cy=50, S=[], n=1+Math.floor(r()*(2+w*1.5)); let rad=40; for(let i=0;i<n&&rad>8;i++){ const a0=r()*Math.PI*2, gap=(.1+r()*.35)*Math.PI*2; S.push(arc(cx,cy,rad*D.aspect,rad,a0,Math.PI*2-gap,36));
+      if(r()<.7){ const a=a0+r()*(Math.PI*2-gap); S.push([[cx+Math.cos(a)*rad*D.aspect,cy+Math.sin(a)*rad]]); } if(r()<.4){ const a=a0-gap/2; S.push([[cx+Math.cos(a)*(rad-9)*D.aspect,cy+Math.sin(a)*(rad-9)],[cx+Math.cos(a)*(rad+7)*D.aspect,cy+Math.sin(a)*(rad+7)]]); } rad-=10+r()*8; }
+    if(r()<.5) S.push([[cx,cy]]); return S; },
+  // a grid of dots, some lit
+  braille(r,D,w){ const cols=2+Math.floor(r()*2), rows=3+Math.floor(r()*2), S=[]; for(let i=0;i<cols;i++) for(let j=0;j<rows;j++) if(r()<.5+w*.1) S.push([[50+(i-(cols-1)/2)*26,14+j*72/(rows-1)]]); if(S.length<2) S.push([[37,14]],[[63,86]]); if(r()<.25+w*.3){ const y=14+Math.floor(r()*rows)*72/(rows-1); S.push([[24,y],[76,y]]); } return S; },
+  // a trace across the page that jumps
+  seismic(r,D,w){ const y0=30+r()*40, n=7+Math.floor(r()*(5+w*6)), pts=[[4,y0]], hot=r(); for(let i=1;i<n;i++){ const u=i/(n-1), env=Math.exp(-Math.pow((u-hot)/.22,2)); pts.push([4+92*u, Math.max(5,Math.min(95,y0+(i%2?-1:1)*(4+r()*40*env)))]); } pts.push([96,y0]);
+    const S=[pts]; if(r()<.4) S.push([[10+r()*80,Math.min(94,y0+30+r()*12)]]); return S; },
+  // loops opening out from one point
+  petals(r,D,w){ const cx=50+(r()-.5)*14, cy=52+(r()-.5)*14, n=2+Math.floor(r()*(3+w*2)), a0=r()*Math.PI*2, S=[]; for(let i=0;i<n;i++){ const a=a0+i*Math.PI*2/n+(r()-.5)*.5*w, L=22+r()*20, wd=5+r()*9, pts=[];
+      for(let k=0;k<=20;k++){ const t=k/20*Math.PI*2, lx=L*(1-Math.cos(t))/2, ly=wd*Math.sin(t); pts.push([cx+Math.cos(a)*lx-Math.sin(a)*ly, cy+Math.sin(a)*lx+Math.cos(a)*ly]); } S.push(pts); }
+    if(r()<.5) S.push([[cx,cy],[cx+(r()-.5)*20,96]]); return S; },
+  // moons
+  crescent(r,D,w){ const S=[], n=1+Math.floor(r()*(2+w*2)); for(let i=0;i<n;i++){ const cx=34+r()*32, cy=34+r()*32, rad=18+r()*20, a0=r()*Math.PI*2, sw=(.9+r()*.8)*Math.PI; S.push(arc(cx,cy,rad*D.aspect,rad,a0,sw,22)); if(r()<.5) S.push(arc(cx+Math.cos(a0+sw/2)*rad*.45,cy+Math.sin(a0+sw/2)*rad*.45,rad*.75*D.aspect,rad*.75,a0+.25,sw-.5,18)); if(r()<.5) S.push([[cx,cy]]); } return S; },
+  // a stem that forks, and forks again
+  fork(r,D,w){ const S=[], grow=(x,y,a,L,depth)=>{ const x2=Math.max(5,Math.min(95,x+Math.cos(a)*L)), y2=Math.max(5,Math.min(95,y+Math.sin(a)*L)); S.push([[x,y],[x2,y2]]); if(depth<=0){ if(r()<.35) S.push([[x2,y2]]); return; } const k=r()<.25+w*.3?3:2; for(let i=0;i<k;i++) grow(x2,y2,a+(i-(k-1)/2)*(.5+r()*.5)+(r()-.5)*.3,L*(.55+r()*.2),depth-1); };
+    grow(50+(r()-.5)*24,94,-Math.PI/2+(r()-.5)*.4,36+r()*12,1+Math.floor(r()*(1.4+w))); return S; },
 };
 function genGlyph(r, style, D, w){
   const st = style==='mixed' ? pick(r,SKEYS) : style;
@@ -1126,11 +1186,14 @@ SL.forEach(([i,o,get,set,f,kind])=>{ $(i).addEventListener('input',e=>{ set(+e.t
   if(kind===1) changed(); else if(kind===2){ regenAlphabet(); } else if(kind===3){ saveLang(); glyphsChanged(); } else { tBuf=null; markChip($('#vPreset'),''); sideLcd(); saveLang(); } setPct(e.target); }); });
 const presetOf=()=>Object.keys(PRESETS).find(n=>Object.keys(PRESETS[n]).every(k=>Math.abs(PRESETS[n][k]-L.voice[k])<1e-6))||'';
 chipGroup($('#vPreset'), Object.fromEntries(Object.keys(PRESETS).map(n=>[n,n.toLowerCase()])), '', n=>{ L.voice={...L.voice,...PRESETS[n]}; tBuf=null; saveLang(); syncSliders(); playSample(); });
-const ENGINES={synth:'built-in', ...Object.fromEntries(Object.entries(NATURAL).map(([k,v])=>[k,v.label]))};
+const ENGINES={synth:'origin', ...Object.fromEntries(Object.entries(NATURAL).map(([k,v])=>[k,v.label]))};
 function renderEngine(){ const cur=NATURAL[L.engine]?L.engine:'synth'; markChip($('#vEngine'),cur);
-  $$('.synth-only').forEach(el=>el.classList.toggle('dimmed',cur!=='synth')); if(cur==='synth') naturalStatus(''); }
+  $('#voiceNudge').hidden=cur!=='synth'; if(cur==='synth') naturalStatus(''); }
 chipGroup($('#vEngine'), ENGINES, 'synth', async id=>{ L.engine=id; tBuf=null; saveLang(); renderEngine(); sideLcd();
   if(NATURAL[id]){ try{ await piperVoice(id); playSample(); }catch(e){ toast(e.message); L.engine='synth'; saveLang(); renderEngine(); } } else playSample(); });
+$$('#vEngine .chip').forEach(b=>{ b.title=NATURAL[b.dataset.v] ? NATURAL[b.dataset.v].about+' · '+NATURAL[b.dataset.v].mb+' MB once' : 'instant · the built-in synthesizer: the most alien, the least real'; });
+// the speak section's nudge: one tap switches from the synthesizer to a quick recorded voice (one already downloaded, if there is one)
+$('#nudgeTry').addEventListener('click',()=>{ const quick=['kristin','norman','harri','anna'], have=quick.filter(id=>voiceReady[id]), id=pick(Math.random, have.length?have:quick); $(`#vEngine .chip[data-v="${id}"]`).click(); });
 const setPct=el=>el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');
 $$('input.fad').forEach(el=>{ setPct(el); el.addEventListener('input',()=>setPct(el)); });
 let statusHold=0;
@@ -1139,8 +1202,10 @@ function sideLcd(){ applyHead(); $('#ledMine').classList.toggle('on',Object.keys
   $('#ledMine').classList.toggle('on',Object.keys(recs).length>0); }
 function setStatus(msg){ $('#statusLine').textContent=msg; statusHold=Date.now()+4000; setTimeout(sideLcd,4100); }
 // short on purpose: a slower voice is busy while it makes this, and anything asked for meanwhile waits behind it
-async function playSample(){ if(playSample.busy) return; playSample.busy=true;
-  try{ const words=tokensToWords(translate('Hello, traveler. Will you speak with us?',false)); getCtx(); play(await speakWords(words)); } finally { playSample.busy=false; } }
+async function playSample(){ if(playSample.busy) return; playSample.busy=true; const k=$('#vTry'), was=k.innerHTML; k.textContent=NATURAL[L.engine]&&NATURAL[L.engine].kind==='kokoro' ? 'making the sample (this voice is slow)…' : 'making the sample…';
+  try{ const words=tokensToWords(translate('Hello, traveler. Will you speak with us?',false)); getCtx(); play(await speakWords(words)); }
+  catch(e){ toast(e&&e.message||'The sample didn’t play.'); }
+  finally { playSample.busy=false; k.innerHTML=was; } }
 $('#vTry').addEventListener('click',playSample);
 function syncSliders(){ renderAccent(); SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
 
@@ -1152,7 +1217,7 @@ $('#langName').addEventListener('input',e=>{ L.name=e.target.value; saveLang(); 
 function renderAccent(){ const el=$('#accentInfo'); if(!el) return; const A=acc(), stress={first:'stress on the first syllable',last:'stress on the last syllable',penult:'stress on the second-to-last syllable',even:'every syllable even'}[A.stress];
   el.innerHTML=`<span><b>${MELODY[A.melody]}</b> melody${A.melody==='flat'?'':', '+(A.range>1.5?'wide':A.range<.95?'narrow':'medium')+' range'} · ${stress} · ${A.longV?'long and short vowels':'vowels all one length'} · ${A.gap<.8?'words run together':A.gap>1.35?'words set apart':'even spacing'} · ${A.tempo>1.08?'quick':A.tempo<.93?'slow':'steady'}</span>`; }
 $('#accentNew').addEventListener('click',()=>{ L.accent=makeAccent(rngFrom(Math.random()*4e9)); tBuf=null; saveLang(); renderAccent(); sideLcd(); playSample(); });
-function randomVoice(r){ const speechy=['Natural voice','Natural voice','Soft and breathy','Giant','Small creature','Ethereal','Gravel beast','Hive choir']; const base=PRESETS[pick(r, r()<.8?speechy:Object.keys(PRESETS))]; const j=(v,a,lo,hi)=>+Math.max(lo,Math.min(hi,v+(r()-.5)*a)).toFixed(2);
+function randomVoice(r){ const speechy=['Natural voice','Soft and breathy','Giant','Small creature','Ethereal','Gravel beast','Hive choir','Deep ocean','Glass child','Stone elder','Wind spirit','Cathedral','Dream voice','Throat singer','Swarm queen','Little bell']; const base=PRESETS[pick(r, r()<.8?speechy:Object.keys(PRESETS))]; const j=(v,a,lo,hi)=>+Math.max(lo,Math.min(hi,v+(r()-.5)*a)).toFixed(2);
   return {...base,pitch:Math.round(j(base.pitch,90,45,400)),formant:j(base.formant,.35,.6,1.7),breath:j(base.breath,.3,0,1),jitter:j(base.jitter,.3,0,1),vib:j(base.vib,.3,0,1)}; }
 function randomLanguage(){
   const r=rngFrom(Math.random()*4e9);
@@ -1179,7 +1244,7 @@ function readLib(){ try{ const o=JSON.parse(store.get(LIB_KEY)||'null'); if(o&&o
 function writeLib(){ if(!store.set(LIB_KEY,JSON.stringify(lib))) toast('This browser’s storage is full. Save your languages as files to keep them.'); }
 let saveT=0;
 function saveLangNow(){ clearTimeout(saveT); if(!L.id) L.id=newId(); lib.langs[L.id]={...L, updated:Date.now()}; lib.current=L.id; writeLib(); renderLib(); }
-function saveLang(){ clearTimeout(saveT); saveT=setTimeout(saveLangNow,300); }
+function saveLang(){ delete L.auto; clearTimeout(saveT); saveT=setTimeout(saveLangNow,300); }   // any change you make turns a language the page made up into one of yours
 function normaliseLang(o){ if(!o||!Array.isArray(o.inv)||!o.voice) throw new Error('not a language');
   const n={...structuredClone(DEFAULT),...structuredClone(o)}; n.voice={...DEFAULT.voice,...o.voice}; n.inv=n.inv.filter(k=>PM[k]); if(!n.inv.some(isV)) n.inv.push('a');
   if(!o.accent||typeof o.accent!=='object') n.accent=String(n.seed)===String(DEFAULT.seed)&&n.name===DEFAULT.name ? {...ACCENT0} : makeAccent(rngFrom(hash(String(n.seed)+'|accent')));   // languages from before accents get one of their own, the same every time
@@ -1252,21 +1317,27 @@ $('#headNew').addEventListener('click',()=>{ const r=rngFrom(Math.random()*4e9);
 const VIDEO_TYPES=[['video/mp4;codecs="avc1.42E01E,mp4a.40.2"','mp4'],['video/mp4;codecs="avc1.640028,mp4a.40.2"','mp4'],['video/webm;codecs=vp9,opus','webm'],['video/webm;codecs=vp8,opus','webm'],['video/webm','webm'],['video/mp4','mp4']];
 const canShareFile=f=>{ try{ return !!navigator.canShare && navigator.canShare({files:[f]}); }catch(e){ return false; } };
 let videoKeep=null, videoBusy=false;
+// Social formats. Phones and slower machines record at 720 wide, others at 1080.
+const VFMT={'9:16':[9,16],'4:5':[4,5]}; let vfmt=VFMT[store.get('xenoglot-v1-vfmt')]?store.get('xenoglot-v1-vfmt'):'9:16';
+const markFmt=()=>$$('#vFmt .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===vfmt));
+$('#vFmt').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return; vfmt=b.dataset.v; store.set('xenoglot-v1-vfmt',vfmt); markFmt(); }); markFmt();
+const videoSize=()=>{ const w=(matchMedia('(max-width:850px)').matches||(navigator.hardwareConcurrency||4)<=4)?720:1080, [a,b]=VFMT[vfmt]; return [w, Math.round(w*b/a/2)*2]; };
 async function recordVideo(){ if(videoBusy||!head) return; const st=$('#headStatus'), cv=$('#headCanvas'), key=$('#headVideo');
   const ty=window.MediaRecorder && cv.captureStream ? VIDEO_TYPES.find(t=>MediaRecorder.isTypeSupported(t[0])) : null;
   if(!ty){ toast('This browser can’t record video. Try Chrome, Edge or Safari.'); return; }
   videoBusy=true; key.disabled=true; let timer=0;
   try{ st.textContent='getting the speech ready…';
     const buf=(!$('#v-audio').hidden && dBuf) ? dBuf : await getTBuf();
+    const size=videoSize(); head.setFormat(size); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));   // the monitor becomes the video frame while it records
     const ctx=getCtx(), dest=ctx.createMediaStreamDestination(), stream=new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
-    const rec=new MediaRecorder(stream,{mimeType:ty[0], videoBitsPerSecond:5e6, audioBitsPerSecond:128000}), chunks=[]; rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+    const rec=new MediaRecorder(stream,{mimeType:ty[0], videoBitsPerSecond:size[0]>=1080?8e6:5e6, audioBitsPerSecond:160000}), chunks=[]; rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
     const stopped=new Promise(r=>rec.onstop=r); rec.start(); key.classList.add('recording'); $('#ledRec').classList.add('on'); const t0=performance.now();
     timer=setInterval(()=>{ st.textContent=`recording video… ${fmtS((performance.now()-t0)/1000)} of ${fmtS(buf.duration+.8)}`; },250);
     await new Promise(r=>setTimeout(r,350));                                   // a beat of the head at rest first
     await new Promise(done=>play(buf, !$('#v-translate').hidden?$('#waveT'):!$('#v-audio').hidden?$('#waveD'):null, dest, done));
     await new Promise(r=>setTimeout(r,450)); rec.stop(); await stopped;
-    const blob=new Blob(chunks,{type:ty[0].split(';')[0]}), name=slug(L.name)+'-speaking.'+ty[1];
-    videoKeep=new File([blob],name,{type:blob.type}); st.textContent=`video ready · ${fmtS(buf.duration)} · ${(blob.size/1e6).toFixed(1)} MB · .${ty[1]}`;
+    head.setFormat(null); const blob=new Blob(chunks,{type:ty[0].split(';')[0]}), name=slug(L.name)+'-'+vfmt.replace(':','x')+'.'+ty[1];
+    videoKeep=new File([blob],name,{type:blob.type}); st.textContent=`video ready · ${vfmt} · ${size[0]}×${size[1]} · ${(blob.size/1e6).toFixed(1)} MB · .${ty[1]}`+(ty[1]==='mp4'?'':' (this browser can’t make .mp4: use Chrome, Edge or Safari for Instagram)');
     $('#headShare').hidden=!canShareFile(videoKeep);
     await saveFile(name, blob);
   }catch(e){ st.textContent=''; toast(e.message||'The video couldn’t be recorded.'); }
@@ -1328,8 +1399,11 @@ $('#enText').value=store.get('xenoglot-v1-text')||'The travelers walked slowly i
     history.replaceState(null,'',location.pathname+location.hash);
   }
   if(!shared||!L.id){ const cur=lib.current&&lib.langs[lib.current];
-    if(cur) await useLang(cur); else await useLang(structuredClone(DEFAULT),{fresh:true}); }
-  loadExamples(); checkVoiceCache();
+    if(cur && !cur.auto) await useLang(cur);
+    else { for(const id of Object.keys(lib.langs)) if(lib.langs[id].auto){ delete lib.langs[id]; try{ localStorage.removeItem(RECS_KEY(id)); }catch(e){} }   // the last made-up one, never touched, makes way
+      const r=rngFrom(Math.random()*4e9); randomLanguage(); L.head=Math.floor(r()*4294967295); L.voice=randomVoice(r); L.engine='synth'; L.auto=1; await useLang(L,{fresh:true}); } }
+  loadExamples(); await checkVoiceCache();
+  if(NATURAL[L.engine] && voiceReady[L.engine]) piperVoice(L.engine).catch(()=>{});   // a recorded voice that is already downloaded starts warming up at once
 })();
 addEventListener('resize',()=>{ drawWave($('#waveT'),tBuf,-1); if(dBuf) drawWave($('#waveD'),dBuf,-1); });
 })();

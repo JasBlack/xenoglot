@@ -50,7 +50,7 @@ try {
   check(/placed on the original’s timing · built-in voice/.test(await p.textContent('#dStatus')), 'converts with the built-in voice on the original timing');
 
   // every natural voice: the two English ones, the ones trained on other languages, and the lifelike set last (heart stays selected)
-  for (const [id, label] of [['kristin', 'american woman'], ['harri', 'finnish man'], ['anna', 'hungarian woman'], ['vais', 'vietnamese woman'], ['alpha', 'japanese woman +'], ['yunjian', 'mandarin man +'], ['hindi', 'hindi woman +'], ['nicola', 'italian man +'], ['heart', 'american woman +']]) {
+  for (const [id, label] of [['kristin', 'clarity'], ['harri', 'patience'], ['anna', 'grace'], ['vais', 'haste'], ['alpha', 'reverie +'], ['yunjian', 'valour +'], ['hindi', 'devotion +'], ['nicola', 'longing +'], ['heart', 'wonder +']]) {
     await p.goto(URL0 + '#sounds'); await p.waitForTimeout(600);
     await p.click(`#vEngine .chip[data-v="${id}"]`);
     await status('#engineStatus', 'ready');
@@ -66,7 +66,7 @@ try {
   await p.goto(URL0 + '#audio'); await p.waitForTimeout(600);
   await p.setInputFiles('#fileTrack', sample); await status('#dInfo', 'phrases');
   await p.click('#dGo'); await status('#dStatus', 'made in');
-  check(/placed on the original’s timing · american woman \+/.test(await p.textContent('#dStatus')), 'loading another recording clears the old transcript, and it converts with a natural voice: ' + JSON.stringify(await p.textContent('#dStatus')));
+  check(/placed on the original’s timing · wonder \+/.test(await p.textContent('#dStatus')), 'loading another recording clears the old transcript, and it converts with a natural voice: ' + JSON.stringify(await p.textContent('#dStatus')));
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 } finally { await browser.close(); server.close(); }
 process.exit(failed ? 1 : 0);
