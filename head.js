@@ -384,6 +384,10 @@ function lines(H, m, t, amp, st) {
   return out;
 }
 
+// the Xenoglot mark (the curl from the app icon), as points centred on its middle, for the sigil
+const LOGO = (() => { const segs = [[[17, 45], [17, 31], [26, 20], [37, 20]], [[37, 20], [44, 20], [48, 24], [48, 30]], [[48, 30], [48, 36], [43, 40], [38, 40]], [[38, 40], [33, 40], [30, 37], [30, 33]], [[30, 33], [30, 30], [32, 28], [35, 28]]], out = [];
+  segs.forEach((c, si) => { for (let i = si ? 1 : 0; i <= 12; i++) { const t = i / 12, m = 1 - t; out.push([m * m * m * c[0][0] + 3 * m * m * t * c[1][0] + 3 * m * t * t * c[2][0] + t * t * t * c[3][0] - 32, m * m * m * c[0][1] + 3 * m * m * t * c[1][1] + 3 * m * t * t * c[2][1] + t * t * t * c[3][1] - 32]); } }); return out; })();
+
 /* ---------- mouth shapes: what each sound does to the jaw, lips and tongue ---------- */
 const PLACE = { p: 'lip', b: 'lip', m: 'lip', f: 'liptooth', v: 'liptooth', w: 'round', t: 'front', d: 'front', n: 'front', s: 'front', z: 'front', l: 'front', r: 'front', 'ř': 'front', 'þ': 'front', 'ł': 'front', c: 'front',
   'š': 'mid', 'ž': 'mid', j: 'mid', k: 'back', g: 'back', 'ŋ': 'back', x: 'back', q: 'deep', h: 'throat', 'ʔ': 'throat' };
@@ -553,11 +557,15 @@ function create(canvas, opts) {
       // the sigil: a small living mark, different for every creature. A spiral of the voice at its heart, a ring whose lobes
       // drift from one count to another, arcs that open and close, and little marks in orbit that change shape as they go
       ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = .9 * dpr;
-      ctx.beginPath(); for (let i = 0; i < N; i += 2) { const u = i / (N - 1), h = hist[(hi + i) % N], a = u * 3 * TAU - T * 1.6 * sp, r = R * .5 * (.08 + .92 * u) * (1 + .5 * h * Math.sin(u * 40 + T * 4)), x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-      ctx.strokeStyle = `rgba(${C.feat},${a1})`; ctx.stroke();
-      const m0 = 3 + sg % 4, ph = T * .13 + sg, mA = m0 + Math.floor(ph) % 3, mB = m0 + Math.floor(ph + 1) % 3, mx = smooth(ph - Math.floor(ph)), dep = .1 + .3 * amp;
-      ctx.beginPath(); for (let k = 0; k <= 72; k++) { const th = k / 72 * TAU, r = R * .86 * (1 + dep * lerp(Math.cos(mA * th), Math.cos(mB * th), mx)), a = th + T * .3 * sp, x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-      ctx.strokeStyle = `rgba(${C.feat},${a1 * .7})`; ctx.stroke();
+      { const k = R * 1.5 / 17, rot = Math.sin(T * .4 + sg) * .12, cr2 = Math.cos(rot), sr2 = Math.sin(rot), M = LOGO.length, pts = [];   // the Xenoglot mark, written like a scope trace: the voice runs along it as a ripple
+        const place = (x, y) => [ox + (x * cr2 - y * sr2) * k, oy + (x * sr2 + y * cr2) * k];
+        for (let i = 0; i < M; i++) { const u = i / (M - 1), h = hist[(hi + Math.floor(u * (N - 1))) % N], a = LOGO[Math.max(0, i - 1)], b = LOGO[Math.min(M - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, w = (.15 + 1.25 * h) * Math.sin(u * 16 - T * 9) * (live ? 1 : .25) * Math.sin(Math.PI * Math.min(1, u * 1.15));
+          pts.push(place(LOGO[i][0] - dy / l * w, LOGO[i][1] + dx / l * w)); }
+        ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+        ctx.strokeStyle = `rgba(57,255,136,${live ? .22 : .1})`; ctx.lineWidth = 5.5 * k; ctx.stroke(); ctx.strokeStyle = `rgba(57,255,136,${a1})`; ctx.lineWidth = Math.max(dpr, 2.6 * k); ctx.stroke();
+        const tip = pts[clamp(Math.floor(((T * (live ? .9 : .25)) % 1) * (M - 1)) || 0, 0, M - 1)]; ctx.fillStyle = `rgba(255,255,255,${live ? .95 : .5})`; ctx.beginPath(); ctx.arc(tip[0], tip[1], 1.3 * dpr, 0, TAU); ctx.fill();   // the point writing it
+        const dot = place(14, 15), pr = (4.5 + 3 * amp) * k; ctx.fillStyle = `rgba(179,107,255,${live ? 1 : .6})`; ctx.beginPath(); ctx.arc(dot[0], dot[1], pr, 0, TAU); ctx.fill();   // its violet dot beats with the voice
+        if (live) { const ring = (T * 1.4) % 1; ctx.strokeStyle = `rgba(179,107,255,${.7 * (1 - ring)})`; ctx.lineWidth = dpr * .8; ctx.beginPath(); ctx.arc(dot[0], dot[1], pr + ring * 7 * k, 0, TAU); ctx.stroke(); } ctx.lineWidth = .9 * dpr; }
       const nA = 2 + sg % 3; ctx.strokeStyle = `rgba(${C.tract},${a1 * .85})`;
       for (let k = 0; k < nA; k++) { const a0 = k / nA * TAU - T * .5 * sp + sg, len = TAU / nA * (.3 + .35 * (.5 + .5 * Math.sin(T * .7 + k * 2.1))); ctx.beginPath(); ctx.arc(ox, oy, R * 1.28, a0, a0 + len); ctx.stroke(); }
       const nS = 3 + sg % 3; ctx.fillStyle = ctx.strokeStyle = `rgba(${C.brain},${a1})`;
@@ -588,7 +596,7 @@ function create(canvas, opts) {
 
   function fit() { const dpr = [2, 1.5, 1.25][quality], w = fmt ? fmt[0] : Math.round((canvas.clientWidth || 320) * dpr), h = fmt ? fmt[1] : Math.round((canvas.clientHeight || 400) * dpr);   /* 2× where the machine keeps up; a fixed frame while a video records */
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; ctx.fillStyle = '#0b0b0c'; ctx.fillRect(0, 0, w, h); } }
-  function tick(now) { const dt = Math.min(.05, (now - last) / 1000); last = now; fit(); const t0 = performance.now(); step(dt); draw();
+  function tick(now) { const dt = clamp((now - last) / 1000, 0, .05); last = now; fit(); const t0 = performance.now();   /* the first frame's clock can read earlier than the start: never step backwards */ step(dt); draw();
     cost += (performance.now() - t0 - cost) * .05; slowFor = cost > 24 ? slowFor + dt : 0; fastFor = cost < 7 ? fastFor + dt : 0;   // how long a frame takes to draw, smoothed
     if (slowFor > 1.5 && quality < 2) { quality++; slowFor = 0; cost *= .6; } else if (fastFor > 8 && quality > 0) { quality--; fastFor = 0; }
     requestAnimationFrame(tick); }

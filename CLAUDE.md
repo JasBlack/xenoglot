@@ -66,7 +66,7 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Alphabet styles: 23 (new: constellation, cuneiform, ogham, rings, braille, seismic, petals, crescent, fork). The style list is open by default. `mixed` draws from all of them.
 - Video: `#vFmt` picks 9:16 or 4:5 (`xenoglot-v1-vfmt`). `head.setFormat([w, h])` fixes the canvas pixel size while recording (720 wide on phones and machines with 4 cores or fewer, else 1080); CSS `object-fit: contain` keeps it undistorted on screen, and `draw()` lays out for a 360 px wide design. Still MediaRecorder: .mp4 where the browser can, else .webm with a note.
 - Head speed: `tick()` times `step + draw`; over 24 ms for 1.5 s lowers `quality` (0–2): canvas scale 2 → 1.5 → 1.25, no bloom pass, half the stars. Under 7 ms for 8 s raises it again.
-- Sigil: the spiral scope became a small mark at the top right: voice spiral at the centre, a ring whose lobe count drifts, arcs opening and closing, and orbiting marks that change shape; counts come from the head seed.
+- Sigil (2.5.1): the mark at the top right is the Xenoglot icon's curl (`LOGO`, the favicon path sampled to points) in the family green with its violet dot. The voice ripples along the curl, a white point writes it, and the dot beats and sends out rings while speaking. Arcs that open and close and orbiting marks that change shape surround it; their counts come from the head seed.
 
 ## Word shapes (1.2.0)
 - `FREQ` weights every sound by how common it is across languages, times a per-language factor from the seed (`langWeights`), so each language has favourite sounds.
