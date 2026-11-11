@@ -554,21 +554,25 @@ function create(canvas, opts) {
     ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = mono(9, 600); ctx.fillStyle = 'rgba(146,147,153,1)';
     ctx.fillText((info.name || '').toUpperCase().split('').join(' '), pad, pad); ctx.font = mono(8); ctx.fillText('head ' + (d.seed >>> 0).toString(36).toUpperCase() + ' · ' + d.mood, pad, pad + 14 * dpr);
     { const live = speech && amp > .03, half = (short ? 13 : 23) * dpr, k = half / 32, ox = W - pad - half, oy = pad + half, P = (x, y) => [ox + x * k, oy + y * k];
-      // the JAS.BLACK mark, alive: its arms curl and sway with the voice, the eye looks where the creature looks, blinks now and then, and its pupil widens with loudness
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'lighter';
-      let g = ctx.createRadialGradient(ox, oy, 0, ox, oy, 30 * k); g.addColorStop(0, `rgba(161,66,255,${.3 + .3 * amp})`); g.addColorStop(.6, 'rgba(106,44,255,.1)'); g.addColorStop(1, 'rgba(106,44,255,0)'); ctx.fillStyle = g; ctx.fillRect(ox - 30 * k, oy - 30 * k, 60 * k, 60 * k);
-      ctx.globalCompositeOperation = 'source-over'; const turn = T * (live ? .35 : .1);
-      for (let i = 0; i < 6; i++) { const base = (30 + 60 * i) * Math.PI / 180 + turn, cb = Math.cos(base), sb = Math.sin(base), wig = Math.sin(T * (live ? 6 : 1.4) + i * 1.3) * (.12 + .7 * amp), n = JBARM.length, pts = [];
-        for (let q = 0; q < n; q++) { const u = q / (n - 1), a = wig * u, dx = JBARM[q][0], dy = JBARM[q][1] + 15, x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a) - 15; pts.push(P(x * cb - y * sb, x * sb + y * cb)); }   // each arm bends from its root, the tip most
-        g = ctx.createLinearGradient(pts[0][0], pts[0][1], pts[n - 1][0], pts[n - 1][1]); g.addColorStop(0, '#c855f5'); g.addColorStop(.55, '#3dfea0'); g.addColorStop(1, '#74ffbb');
-        ctx.beginPath(); pts.forEach((q, j2) => j2 ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.strokeStyle = g; ctx.lineWidth = 2.6 * k; ctx.stroke(); }
-      ctx.strokeStyle = 'rgba(228,220,255,.35)'; ctx.lineWidth = Math.max(1, k); ctx.beginPath(); ctx.arc(ox, oy, 14.5 * k * (1 + .05 * amp), 0, TAU); ctx.stroke();
+      // the JAS.BLACK mark, made of the same stuff as the creature: a disc of its starfield skin, arms of its glowing line, a void eye with one star.
+      // The arms curl and sway with the voice, the star looks where the creature looks, and the eye blinks now and then.
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'source-over'; const rr = 14.5 * k;
+      let g = ctx.createRadialGradient(ox, oy, rr * .35, ox, oy, rr); g.addColorStop(0, 'rgb(9,11,24)'); g.addColorStop(.75, 'rgb(14,18,40)'); g.addColorStop(1, `rgba(${C.feat},.5)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, rr, 0, TAU); ctx.fill();   // skin, lit at the edge
+      for (let q = 0; q < 22; q++) { const a = rnd(q * 7 + 3) * TAU, r2 = Math.sqrt(rnd(q * 13 + 5)) * rr * .94, z = (.5 + .8 * rnd(q * 3)) * dpr; ctx.fillStyle = `rgba(255,255,255,${.35 + .5 * rnd(q * 5 + 1)})`; ctx.fillRect(ox + Math.cos(a) * r2, oy + Math.sin(a) * r2, z, z); }
+      ctx.globalCompositeOperation = 'lighter'; g = ctx.createRadialGradient(ox, oy, rr * .7, ox, oy, 30 * k); g.addColorStop(0, `rgba(${C.feat},${.16 + .25 * amp})`); g.addColorStop(1, `rgba(${C.feat},0)`); ctx.fillStyle = g; ctx.fillRect(ox - 30 * k, oy - 30 * k, 60 * k, 60 * k);
+      const turn = T * (live ? .35 : .1), arms = new Path2D();
+      for (let i = 0; i < 6; i++) { const base = (30 + 60 * i) * Math.PI / 180 + turn, cb = Math.cos(base), sb = Math.sin(base), wig = Math.sin(T * (live ? 6 : 1.4) + i * 1.3) * (.12 + .7 * amp), n = JBARM.length;
+        for (let q = 0; q < n; q++) { const u = q / (n - 1), a = wig * u, dx = JBARM[q][0], dy = JBARM[q][1] + 15, x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a) - 15, pt = P(x * cb - y * sb, x * sb + y * cb); q ? arms.lineTo(pt[0], pt[1]) : arms.moveTo(pt[0], pt[1]); } }   // each arm bends from its root, the tip most
+      ctx.strokeStyle = `rgba(${C.feat},.07)`; ctx.lineWidth = 9 * k; ctx.stroke(arms); ctx.strokeStyle = `rgba(${C.feat},.24)`; ctx.lineWidth = 4.6 * k; ctx.stroke(arms); ctx.strokeStyle = `rgba(${C.feat},.95)`; ctx.lineWidth = Math.max(dpr, 1.5 * k); ctx.stroke(arms);
+      ctx.strokeStyle = 'rgba(239,232,216,.55)'; ctx.lineWidth = Math.max(.7 * dpr, .7 * k); ctx.beginPath(); ctx.arc(ox, oy, rr * (1 + .05 * amp), 0, TAU); ctx.stroke();   // the ring, in cream ink
       const bt = (T + d.phase) % 4.3, open = 1 - .95 * Math.max(0, 1 - Math.abs(bt - .14) / .14), lid = () => { const a = P(-12, 0), b = P(12, 0), c1 = P(0, -12 * open), c2 = P(0, 12 * open); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(c1[0], c1[1], b[0], b[1]); ctx.quadraticCurveTo(c2[0], c2[1], a[0], a[1]); ctx.closePath(); };
-      lid(); ctx.fillStyle = '#f1edff'; ctx.fill(); ctx.save(); lid(); ctx.clip();
-      const ic = P(st.look[0] * 3.2, -st.look[1] * 2); g = ctx.createLinearGradient(ic[0] - 6 * k, ic[1] + 6 * k, ic[0] + 6 * k, ic[1] - 6 * k); g.addColorStop(.15, '#922cff'); g.addColorStop(.45, '#c855f5'); g.addColorStop(.85, '#3dfea0');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ic[0], ic[1], 5.8 * k, 0, TAU); ctx.fill(); ctx.fillStyle = '#050506'; ctx.beginPath(); ctx.arc(ic[0], ic[1], 2.61 * k * (1 + .6 * amp), 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ic[0] + 2.2 * k, ic[1] - 2.2 * k, .99 * k, 0, TAU); ctx.fill(); ctx.restore();
-      lid(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6 * k; ctx.stroke(); }
+      ctx.globalCompositeOperation = 'source-over'; lid(); ctx.fillStyle = '#000'; ctx.fill(); ctx.save(); lid(); ctx.clip();   // the eye: a void, like the creature's own
+      g = ctx.createRadialGradient(ox, oy, 3 * k, ox, oy, 12 * k); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(${C.feat},.45)`); ctx.fillStyle = g; ctx.fillRect(ox - 12 * k, oy - 12 * k, 24 * k, 24 * k);
+      for (let q = 0; q < 9; q++) { const a = rnd(q * 11 + 2) * TAU, r2 = (4 + 6 * rnd(q * 17)) * k, z = (.5 + .6 * rnd(q)) * dpr; ctx.fillStyle = `rgba(255,255,255,${.3 + .4 * rnd(q * 9)})`; ctx.fillRect(ox + Math.cos(a) * r2, oy + Math.sin(a) * r2 * .5, z, z); }
+      const sc = P(st.look[0] * 3.5, -st.look[1] * 1.8), L = (2.6 + 1.6 * amp) * k; ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = Math.max(.8 * dpr, .5 * k); ctx.beginPath(); ctx.moveTo(sc[0] - L, sc[1]); ctx.lineTo(sc[0] + L, sc[1]); ctx.moveTo(sc[0], sc[1] - L); ctx.lineTo(sc[0], sc[1] + L); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(sc[0], sc[1], 1.1 * dpr, 0, TAU); ctx.fill(); ctx.restore();
+      ctx.globalCompositeOperation = 'lighter'; lid(); ctx.strokeStyle = `rgba(${C.feat},.25)`; ctx.lineWidth = 3.4 * k; ctx.stroke(); ctx.strokeStyle = `rgba(${C.feat},1)`; ctx.lineWidth = Math.max(dpr, 1.1 * k); ctx.stroke();
+      // the signature: the JAS.BLACK wordmark under the mark, so pictures and videos carry it
+      const sig = opts.signature; if (sig && sig.complete && sig.naturalWidth && !short) { const sw = half * 2.3, shh = sw * sig.naturalHeight / sig.naturalWidth; ctx.globalAlpha = .85; ctx.drawImage(sig, ox - sw / 2, oy + half + 1 * dpr, sw, shh); ctx.globalAlpha = 1; } }
     const sy = Hh - 22 * dpr, sh = 16 * dpr;   // the scope: loudness of the speech, with a playhead; a breath trace at rest
     if (env && speech) { const now = speech.clock(), n = env.length; ctx.beginPath();
       for (let x = 0; x <= W - 2 * pad; x += 2 * dpr) { const i = Math.floor(x / (W - 2 * pad) * n), v = env[i] || 0; ctx.moveTo(pad + x, sy - v * sh * .5); ctx.lineTo(pad + x, sy + v * sh * .5 + dpr); }
