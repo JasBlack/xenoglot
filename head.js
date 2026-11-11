@@ -384,9 +384,9 @@ function lines(H, m, t, amp, st) {
   return out;
 }
 
-// the Xenoglot mark (the curl from the app icon), as points centred on its middle, for the sigil
-const LOGO = (() => { const segs = [[[17, 45], [17, 31], [26, 20], [37, 20]], [[37, 20], [44, 20], [48, 24], [48, 30]], [[48, 30], [48, 36], [43, 40], [38, 40]], [[38, 40], [33, 40], [30, 37], [30, 33]], [[30, 33], [30, 30], [32, 28], [35, 28]]], out = [];
-  segs.forEach((c, si) => { for (let i = si ? 1 : 0; i <= 12; i++) { const t = i / 12, m = 1 - t; out.push([m * m * m * c[0][0] + 3 * m * m * t * c[1][0] + 3 * m * t * t * c[2][0] + t * t * t * c[3][0] - 32, m * m * m * c[0][1] + 3 * m * m * t * c[1][1] + 3 * m * t * t * c[2][1] + t * t * t * c[3][1] - 32]); } }); return out; })();
+// one tentacle of the JAS.BLACK mark (the eye in a ring with six curling arms), as points measured from the mark's centre
+const JBARM = (() => { const segs = [[[32, 17], [30, 11.5], [32.5, 7], [36.5, 7.5]], [[36.5, 7.5], [39.5, 8], [39.5, 11.5], [37, 12]]], out = [];
+  segs.forEach((c, si) => { for (let i = si ? 1 : 0; i <= 10; i++) { const t = i / 10, m = 1 - t; out.push([m * m * m * c[0][0] + 3 * m * m * t * c[1][0] + 3 * m * t * t * c[2][0] + t * t * t * c[3][0] - 32, m * m * m * c[0][1] + 3 * m * m * t * c[1][1] + 3 * m * t * t * c[2][1] + t * t * t * c[3][1] - 32]); } }); return out; })();
 
 /* ---------- mouth shapes: what each sound does to the jaw, lips and tongue ---------- */
 const PLACE = { p: 'lip', b: 'lip', m: 'lip', f: 'liptooth', v: 'liptooth', w: 'round', t: 'front', d: 'front', n: 'front', s: 'front', z: 'front', l: 'front', r: 'front', 'ř': 'front', 'þ': 'front', 'ł': 'front', c: 'front',
@@ -553,25 +553,22 @@ function create(canvas, opts) {
     ctx.globalCompositeOperation = 'source-over'; const mono = (px, wt = 500) => `${wt} ${px * dpr}px "IBM Plex Mono", ui-monospace, monospace`, pad = 12 * dpr;
     ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = mono(9, 600); ctx.fillStyle = 'rgba(146,147,153,1)';
     ctx.fillText((info.name || '').toUpperCase().split('').join(' '), pad, pad); ctx.font = mono(8); ctx.fillText('head ' + (d.seed >>> 0).toString(36).toUpperCase() + ' · ' + d.mood, pad, pad + 14 * dpr);
-    { const live = speech && amp > .03, R = (short ? 7 : 12) * dpr, ox = W - pad - R * 1.9, oy = pad + R * 1.9, sg = d.seed % 997, N = hist.length, sp = live ? 1 : .35, a1 = live ? .95 : .4;
-      // the sigil: a small living mark, different for every creature. A spiral of the voice at its heart, a ring whose lobes
-      // drift from one count to another, arcs that open and close, and little marks in orbit that change shape as they go
-      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = .9 * dpr;
-      { const k = R * 1.5 / 17, rot = Math.sin(T * .4 + sg) * .12, cr2 = Math.cos(rot), sr2 = Math.sin(rot), M = LOGO.length, pts = [];   // the Xenoglot mark, written like a scope trace: the voice runs along it as a ripple
-        const place = (x, y) => [ox + (x * cr2 - y * sr2) * k, oy + (x * sr2 + y * cr2) * k];
-        for (let i = 0; i < M; i++) { const u = i / (M - 1), h = hist[(hi + Math.floor(u * (N - 1))) % N], a = LOGO[Math.max(0, i - 1)], b = LOGO[Math.min(M - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, w = (.15 + 1.25 * h) * Math.sin(u * 16 - T * 9) * (live ? 1 : .25) * Math.sin(Math.PI * Math.min(1, u * 1.15));
-          pts.push(place(LOGO[i][0] - dy / l * w, LOGO[i][1] + dx / l * w)); }
-        ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
-        ctx.strokeStyle = `rgba(57,255,136,${live ? .22 : .1})`; ctx.lineWidth = 5.5 * k; ctx.stroke(); ctx.strokeStyle = `rgba(57,255,136,${a1})`; ctx.lineWidth = Math.max(dpr, 2.6 * k); ctx.stroke();
-        const tip = pts[clamp(Math.floor(((T * (live ? .9 : .25)) % 1) * (M - 1)) || 0, 0, M - 1)]; ctx.fillStyle = `rgba(255,255,255,${live ? .95 : .5})`; ctx.beginPath(); ctx.arc(tip[0], tip[1], 1.3 * dpr, 0, TAU); ctx.fill();   // the point writing it
-        const dot = place(14, 15), pr = (4.5 + 3 * amp) * k; ctx.fillStyle = `rgba(179,107,255,${live ? 1 : .6})`; ctx.beginPath(); ctx.arc(dot[0], dot[1], pr, 0, TAU); ctx.fill();   // its violet dot beats with the voice
-        if (live) { const ring = (T * 1.4) % 1; ctx.strokeStyle = `rgba(179,107,255,${.7 * (1 - ring)})`; ctx.lineWidth = dpr * .8; ctx.beginPath(); ctx.arc(dot[0], dot[1], pr + ring * 7 * k, 0, TAU); ctx.stroke(); } ctx.lineWidth = .9 * dpr; }
-      const nA = 2 + sg % 3; ctx.strokeStyle = `rgba(${C.tract},${a1 * .85})`;
-      for (let k = 0; k < nA; k++) { const a0 = k / nA * TAU - T * .5 * sp + sg, len = TAU / nA * (.3 + .35 * (.5 + .5 * Math.sin(T * .7 + k * 2.1))); ctx.beginPath(); ctx.arc(ox, oy, R * 1.28, a0, a0 + len); ctx.stroke(); }
-      const nS = 3 + sg % 3; ctx.fillStyle = ctx.strokeStyle = `rgba(${C.brain},${a1})`;
-      for (let k = 0; k < nS; k++) { const a = k / nS * TAU + T * .22 * sp * (k % 2 ? 1 : -1.4) + sg, rr = R * (1.62 + .1 * Math.sin(T + k)), x = ox + Math.cos(a) * rr, y = oy + Math.sin(a) * rr, kind = Math.floor(T * .25 + k * 1.7 + sg) % 4, z = (1.5 + 1.4 * amp) * dpr; ctx.beginPath();
-        if (kind === 0) { ctx.arc(x, y, z * .6, 0, TAU); ctx.fill(); } else if (kind === 1) { for (let q = 0; q < 3; q++) { const b = a + q * TAU / 3; q ? ctx.lineTo(x + Math.cos(b) * z, y + Math.sin(b) * z) : ctx.moveTo(x + Math.cos(b) * z, y + Math.sin(b) * z); } ctx.closePath(); ctx.stroke(); }
-        else if (kind === 2) { ctx.moveTo(x - z, y); ctx.lineTo(x + z, y); ctx.moveTo(x, y - z); ctx.lineTo(x, y + z); ctx.stroke(); } else { ctx.arc(x, y, z, 0, TAU); ctx.stroke(); } } }
+    { const live = speech && amp > .03, half = (short ? 13 : 23) * dpr, k = half / 32, ox = W - pad - half, oy = pad + half, P = (x, y) => [ox + x * k, oy + y * k];
+      // the JAS.BLACK mark, alive: its arms curl and sway with the voice, the eye looks where the creature looks, blinks now and then, and its pupil widens with loudness
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'lighter';
+      let g = ctx.createRadialGradient(ox, oy, 0, ox, oy, 30 * k); g.addColorStop(0, `rgba(161,66,255,${.3 + .3 * amp})`); g.addColorStop(.6, 'rgba(106,44,255,.1)'); g.addColorStop(1, 'rgba(106,44,255,0)'); ctx.fillStyle = g; ctx.fillRect(ox - 30 * k, oy - 30 * k, 60 * k, 60 * k);
+      ctx.globalCompositeOperation = 'source-over'; const turn = T * (live ? .35 : .1);
+      for (let i = 0; i < 6; i++) { const base = (30 + 60 * i) * Math.PI / 180 + turn, cb = Math.cos(base), sb = Math.sin(base), wig = Math.sin(T * (live ? 6 : 1.4) + i * 1.3) * (.12 + .7 * amp), n = JBARM.length, pts = [];
+        for (let q = 0; q < n; q++) { const u = q / (n - 1), a = wig * u, dx = JBARM[q][0], dy = JBARM[q][1] + 15, x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a) - 15; pts.push(P(x * cb - y * sb, x * sb + y * cb)); }   // each arm bends from its root, the tip most
+        g = ctx.createLinearGradient(pts[0][0], pts[0][1], pts[n - 1][0], pts[n - 1][1]); g.addColorStop(0, '#c855f5'); g.addColorStop(.55, '#3dfea0'); g.addColorStop(1, '#74ffbb');
+        ctx.beginPath(); pts.forEach((q, j2) => j2 ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.strokeStyle = g; ctx.lineWidth = 2.6 * k; ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(228,220,255,.35)'; ctx.lineWidth = Math.max(1, k); ctx.beginPath(); ctx.arc(ox, oy, 14.5 * k * (1 + .05 * amp), 0, TAU); ctx.stroke();
+      const bt = (T + d.phase) % 4.3, open = 1 - .95 * Math.max(0, 1 - Math.abs(bt - .14) / .14), lid = () => { const a = P(-12, 0), b = P(12, 0), c1 = P(0, -12 * open), c2 = P(0, 12 * open); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(c1[0], c1[1], b[0], b[1]); ctx.quadraticCurveTo(c2[0], c2[1], a[0], a[1]); ctx.closePath(); };
+      lid(); ctx.fillStyle = '#f1edff'; ctx.fill(); ctx.save(); lid(); ctx.clip();
+      const ic = P(st.look[0] * 3.2, -st.look[1] * 2); g = ctx.createLinearGradient(ic[0] - 6 * k, ic[1] + 6 * k, ic[0] + 6 * k, ic[1] - 6 * k); g.addColorStop(.15, '#922cff'); g.addColorStop(.45, '#c855f5'); g.addColorStop(.85, '#3dfea0');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ic[0], ic[1], 5.8 * k, 0, TAU); ctx.fill(); ctx.fillStyle = '#050506'; ctx.beginPath(); ctx.arc(ic[0], ic[1], 2.61 * k * (1 + .6 * amp), 0, TAU); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ic[0] + 2.2 * k, ic[1] - 2.2 * k, .99 * k, 0, TAU); ctx.fill(); ctx.restore();
+      lid(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6 * k; ctx.stroke(); }
     const sy = Hh - 22 * dpr, sh = 16 * dpr;   // the scope: loudness of the speech, with a playhead; a breath trace at rest
     if (env && speech) { const now = speech.clock(), n = env.length; ctx.beginPath();
       for (let x = 0; x <= W - 2 * pad; x += 2 * dpr) { const i = Math.floor(x / (W - 2 * pad) * n), v = env[i] || 0; ctx.moveTo(pad + x, sy - v * sh * .5); ctx.lineTo(pad + x, sy + v * sh * .5 + dpr); }
