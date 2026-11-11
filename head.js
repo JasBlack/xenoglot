@@ -540,11 +540,12 @@ function create(canvas, opts) {
       ctx.strokeStyle = `rgba(${color},${al * .9})`; ctx.lineWidth = w * dpr; ctx.stroke(); }   // the trace
     /* ----- eyes: a black void set into the skin, faint stars round its edge, one bright star that looks where the creature looks ----- */
     const rgbaF = (a, k = 1) => `rgba(${fa.map(v => Math.round(Math.min(255, v * k))).join(',')},${a})`;
-    for (const e of eyes) { if (e.nz < .12 || e.r < 1.5 * dpr) continue; const r = e.r, open = 1 - .92 * e.blink, an = Math.atan2(-e.ny, e.nx), fl = Math.max(.3, e.nz), ox2 = e.nx * r * .36, oy2 = -e.ny * r * .36;
+    for (const e of eyes) { const vis = smooth((e.nz + .3) / .38); if (vis < .02 || e.r < 1.5 * dpr) continue;   /* an eye turning away fades and slims; it only goes once it is well round the back (sideways eyes stay) */
+      const r = e.r, open = 1 - .92 * e.blink, an = Math.atan2(-e.ny, e.nx), fl = Math.max(.3, e.nz), ox2 = e.nx * r * .36, oy2 = -e.ny * r * .36;
       // The eye is a dome, not a disc: its base is an ellipse lying in the skin, and a ball stands out of it toward wherever it faces.
       // Seen from the front the two coincide; as the head turns, the dome bulges past its base. It shuts to blink.
       const shape = k => { ctx.beginPath(); ctx.ellipse(0, 0, r * fl * k, r * k, an, 0, TAU); ctx.moveTo(ox2 + r * .9 * k, oy2); ctx.arc(ox2, oy2, r * .9 * k, 0, TAU); };
-      ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, open);
+      ctx.save(); ctx.globalAlpha = vis; ctx.translate(e.x, e.y); ctx.scale(1, open);
       ctx.globalCompositeOperation = 'lighter'; let g = ctx.createRadialGradient(ox2 * .5, oy2 * .5, r * .8, ox2 * .5, oy2 * .5, r * 1.8); g.addColorStop(0, rgbaF(.5)); g.addColorStop(1, rgbaF(0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox2 * .5, oy2 * .5, r * 1.8, 0, TAU); ctx.fill();
       ctx.globalCompositeOperation = 'source-over'; shape(1.27); ctx.fillStyle = rgbaF(.5); ctx.fill(); shape(1.22); ctx.fillStyle = '#050506'; ctx.fill(); shape(1.05); ctx.fillStyle = rgbaF(1, 1.25); ctx.fill(); shape(.96); ctx.fillStyle = '#000'; ctx.fill();   // socket, bright rim, the void
       ctx.save(); shape(.96); ctx.clip();
