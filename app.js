@@ -95,6 +95,7 @@ const DEFAULT = { name:'Velnari', seed: 7741, inv: ['a','e','i','o','u','ë','p'
   onset:.85, coda:.35, cluster:.12, maxSyl:4, voice:{pitch:150,speed:1,formant:1.12,breath:.3,jitter:.45,growl:0,choir:0,ring:0,vib:.15,space:.25},
   style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{}, engine:'synth', accent:{...ACCENT0} };
 const PRESETS = {
+  'Elder giant':        {pitch:45,speed:.8,formant:.72,breath:.14,jitter:.61,growl:.35,choir:0,ring:0,vib:.04,space:.55},   // the voice every visitor starts with (chosen by Jas, Nov 2026)
   'Natural voice':      {pitch:130,speed:1,formant:1,breath:.22,jitter:.45,growl:0,choir:0,ring:0,vib:.1,space:.2},
   'Soft and breathy':   {pitch:200,speed:.92,formant:1.15,breath:.55,jitter:.35,growl:0,choir:0,ring:0,vib:.15,space:.35},
   'Giant':              {pitch:58,speed:.8,formant:.68,breath:.25,jitter:.6,growl:.35,choir:0,ring:0,vib:.1,space:.55},
@@ -1218,6 +1219,7 @@ $('#langName').addEventListener('input',e=>{ L.name=e.target.value; saveLang(); 
 function renderAccent(){ const el=$('#accentInfo'); if(!el) return; const A=acc(), stress={first:'stress on the first syllable',last:'stress on the last syllable',penult:'stress on the second-to-last syllable',even:'every syllable even'}[A.stress];
   el.innerHTML=`<span><b>${MELODY[A.melody]}</b> melody${A.melody==='flat'?'':', '+(A.range>1.5?'wide':A.range<.95?'narrow':'medium')+' range'} · ${stress} · ${A.longV?'long and short vowels':'vowels all one length'} · ${A.gap<.8?'words run together':A.gap>1.35?'words set apart':'even spacing'} · ${A.tempo>1.08?'quick':A.tempo<.93?'slow':'steady'}</span>`; }
 $('#accentNew').addEventListener('click',()=>{ L.accent=makeAccent(rngFrom(Math.random()*4e9)); tBuf=null; saveLang(); renderAccent(); sideLcd(); playSample(); });
+const START_VOICE='Elder giant';
 function randomVoice(r){ const speechy=['Natural voice','Soft and breathy','Giant','Small creature','Ethereal','Gravel beast','Hive choir','Deep ocean','Glass child','Stone elder','Wind spirit','Cathedral','Dream voice','Throat singer','Swarm queen','Little bell']; const base=PRESETS[pick(r, r()<.8?speechy:Object.keys(PRESETS))]; const j=(v,a,lo,hi)=>+Math.max(lo,Math.min(hi,v+(r()-.5)*a)).toFixed(2);
   return {...base,pitch:Math.round(j(base.pitch,90,45,400)),formant:j(base.formant,.35,.6,1.7),breath:j(base.breath,.3,0,1),jitter:j(base.jitter,.3,0,1),vib:j(base.vib,.3,0,1)}; }
 function randomLanguage(){
@@ -1251,7 +1253,7 @@ function normaliseLang(o){ if(!o||!Array.isArray(o.inv)||!o.voice) throw new Err
   if(!o.accent||typeof o.accent!=='object') n.accent=String(n.seed)===String(DEFAULT.seed)&&n.name===DEFAULT.name ? {...ACCENT0} : makeAccent(rngFrom(hash(String(n.seed)+'|accent')));   // languages from before accents get one of their own, the same every time
   else n.accent={...ACCENT0,...o.accent};
   if(typeof n.head!=='number') n.head=hash(String(n.seed)+'|head');   // older languages get a head of their own, the same one every time
-  n.glyphs=n.glyphs&&typeof n.glyphs==='object'?n.glyphs:{}; n.lexicon=n.lexicon&&typeof n.lexicon==='object'?n.lexicon:{}; delete n.recordings; delete n.xenoglot; delete n.updated; return n; }
+  n.glyphs=n.glyphs&&typeof n.glyphs==='object'?n.glyphs:{}; n.lexicon=n.lexicon&&typeof n.lexicon==='object'?n.lexicon:{}; delete n.recordings; delete n.xenoglot; delete n.updated; delete n.auto; return n; }   /* a language that arrives by link or file is never one the page made up */
 async function useLang(o,{recsObj=null,fresh=false}={}){
   stopAudio(); L=normaliseLang(o); if(fresh||!L.id) L.id=newId(); wordCache=new Map(); genAlphabet(true);
   recs={}; let rc=recsObj; if(!rc){ try{ rc=JSON.parse(store.get(RECS_KEY(L.id))||'null'); }catch(e){} }
@@ -1402,7 +1404,7 @@ $('#enText').value=store.get('xenoglot-v1-text')||'The travelers walked slowly i
   if(!shared||!L.id){ const cur=lib.current&&lib.langs[lib.current];
     if(cur && !cur.auto) await useLang(cur);
     else { for(const id of Object.keys(lib.langs)) if(lib.langs[id].auto){ delete lib.langs[id]; try{ localStorage.removeItem(RECS_KEY(id)); }catch(e){} }   // the last made-up one, never touched, makes way
-      const r=rngFrom(Math.random()*4e9); randomLanguage(); L.head=Math.floor(r()*4294967295); L.voice=randomVoice(r); L.engine='synth'; L.auto=1; await useLang(L,{fresh:true}); } }
+      const r=rngFrom(Math.random()*4e9); randomLanguage(); L.head=Math.floor(r()*4294967295); L.voice={...PRESETS[START_VOICE]}; L.engine='synth'; await useLang(L,{fresh:true}); L.auto=1; saveLangNow(); } }   // a new creature and language each time, always starting in the same voice
   loadExamples(); await checkVoiceCache();
   if(NATURAL[L.engine] && voiceReady[L.engine]) piperVoice(L.engine).catch(()=>{});   // a recorded voice that is already downloaded starts warming up at once
 })();
