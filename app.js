@@ -1439,7 +1439,8 @@ document.addEventListener('keydown',e=>{ if(e.metaKey||e.ctrlKey||e.altKey) retu
 
 /* ---------- boot ---------- */
 $('#e44').innerHTML=ENG44.map(([i,w])=>`<div><span class="ipa">${i}</span><span>${w}</span></div>`).join('');
-$('#enText').value=store.get('xenoglot-v1-text')||'The travelers walked slowly into the quiet city. Nobody knew their names, but everyone was watching them.\nAre you coming with us?';
+const START_TEXT='I have created a new alien language, and it is quite easy to understand, you just have to listen clearly.';   // what the creature says until you type something
+$('#enText').value=store.get('xenoglot-v1-text')||START_TEXT;
 (async()=>{
   readLib();
   const shared=new URLSearchParams(location.search).get('l');
