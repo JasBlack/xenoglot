@@ -33,7 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Mono:wght@400;500;600&family=Charis+SIL:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-ui="dark" data-tool="xenoglot" data-version="2.7.1">
+<body data-ui="dark" data-tool="xenoglot" data-version="2.8.0">
 <header class="topbar">
   <div class="brandbox"><span class="brand">XENOGLOT</span><span class="brand-ver"></span></div>
   <nav class="steps" aria-label="Sections">
@@ -90,6 +90,7 @@
   <div class="panel">
     <h2><span>english</span><span>type what it should say</span></h2>
     <textarea id="enText" aria-label="English text"></textarea>
+    <div class="langrow"><span>it speaks</span><div class="chips" id="tLang" role="group" aria-label="What it speaks"><button type="button" class="chip" data-v="alien" title="Its own invented language">its language</button><button type="button" class="chip" data-v="en" title="English, in the creature's voice. Recorded voices sound the most natural; a 0.8 MB word list downloads once">english</button></div></div>
     <div class="lcd" id="tEst"></div>
     <div class="nudge" id="voiceNudge"><span>this is <b>origin</b>, the instant synthetic voice. a recorded voice sounds far more real.</span><button type="button" class="key" id="nudgeTry" title="Switch to a quick recorded voice. A 63 MB download the first time.">try a real voice</button><a class="key" href="#sounds">all voices</a></div>
     <details class="more" id="tOpts"><summary>options</summary>
@@ -108,7 +109,7 @@
     </details>
   </div>
   <div class="panel">
-    <h2><span>in its language</span><span>hover a word for the english</span></h2>
+    <h2><span id="tOutTitle">in its language</span><span>hover a word for the english</span></h2>
     <div class="well transport-well"><canvas class="wave" id="waveT" height="108"></canvas></div>
     <div class="roman" id="outRoman"></div>
     <div class="script well" id="outScript"></div>

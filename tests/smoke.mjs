@@ -69,6 +69,9 @@ try {
   const [share] = await Promise.all([p.waitForEvent('download'), p.click('#tSaveMp3')]);
   const mp3 = await readFile(await share.path());
   const mp3ok = mp3.subarray(0, 3).toString('latin1') === 'ID3' || (mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0);
+  await p.click('#tLang .chip[data-v="en"]'); await p.waitForFunction(() => document.querySelector('#tOutTitle').textContent === 'in english', null, { timeout: 20000 });
+  check((await p.textContent('#outRoman')).includes(await p.inputValue('#enText').then(v => v.split(' ')[0])) && /ˈ/.test(await p.textContent('#outIpa')), 'the creature can speak english, with english pronunciation');
+  await p.click('#tLang .chip[data-v="alien"]'); await p.waitForTimeout(300);
   const [srt] = await Promise.all([p.waitForEvent('download'), p.click('#ovSrt')]);
   const srtText = await readFile(await srt.path(), 'utf8');
   check(srt.suggestedFilename().endsWith('.srt') && /^1\n\d\d:\d\d:\d\d,\d{3} --> \d\d:\d\d:\d\d,\d{3}\n.+\n.+\n/.test(srtText), 'subtitles save as an .srt with timings, english and alien lines');

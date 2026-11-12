@@ -413,7 +413,7 @@ function create(canvas, opts) {
   const drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, idle: 0 }, ptr = { x: 0, y: 0, t: -99 };
   const pose = { yaw: 0, pitch: 0, roll: 0, zoom: 1 }, st = { blinks: [], look: [0, 0], breath: 0, perk: 0, widen: 0, think: 0, chatter: 0 };
   const hist = new Float32Array(200); let plate = null, backdrop = null, hi = 0, histT = 0, fmt = null, quality = 0, cost = 8, slowFor = 0, fastFor = 0;
-  let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, subLines = null, subKey = '', subStyle = opts.subStyle || 2, segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
+  let blinkAt = [], lookTo = [0, 0], nextLook = 1, amp = 0, caption = null, subs = null, subLines = null, subKey = '', subStyle = opts.subStyle || 2, subLang = 'both', segIdx = 0, gest = null, nextGest = 3, jerk = 0, nextJerk = 2, yawn = 0;
 
   function setSeed(seed) { H = build(makeDNA(seed >>> 0)); st.blinks = H.eyes.map(() => 0); blinkAt = H.eyes.map(() => 1 + Math.random() * H.d.temper.blink); gest = null; nextGest = 2 + Math.random() * 3; }
   function envelope(buf) {
@@ -593,12 +593,12 @@ function create(canvas, opts) {
     else { ctx.beginPath(); for (let x = 0; x <= W - 2 * pad; x += 3 * dpr) { const y = sy - Math.sin((T - (1 - x / (W - 2 * pad)) * 6) * TAU * d.breath + d.phase) * sh * .32; x ? ctx.lineTo(pad + x, y) : ctx.moveTo(pad + x, y); }
       ctx.strokeStyle = `rgba(${C.feat},.3)`; ctx.lineWidth = dpr; ctx.stroke(); }
     ctx.globalCompositeOperation = 'source-over'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';   // the word being spoken, and what it means
-    if (subs && speech) { const now = speech.clock(), es = 15, hs = 27 * dpr, gap = 13 * dpr, script = opts.script, side = Math.max(pad, W * .13), maxW = W - 2 * side;
+    if (subs && speech) { const enOnly = subLang === 'en', now = speech.clock(), es = enOnly ? 20 : 15, hs = enOnly ? 0 : 27 * dpr, gap = 13 * dpr, script = opts.script, side = Math.max(pad, W * .13), maxW = W - 2 * side;
       // Subtitles: English on top, the same words in the creature's script under it. One size throughout: lines are broken to fit
       // the middle 74% of the frame, which keeps them clear of the buttons social apps lay over the edges of a video.
       ctx.font = mono(es, 600); ctx.textBaseline = 'top'; ctx.textAlign = 'center';
-      if (subKey !== W + '|' + subs.length) { subKey = W + '|' + subs.length; subLines = []; let line = [], lw = 0;
-        for (const w of subs) { w.ew = ctx.measureText(w.en.toLowerCase()).width; w.sw = script ? script.width(w.w, hs) : ctx.measureText(w.w).width; w.cw = Math.max(w.ew, w.sw);
+      if (subKey !== W + '|' + subs.length + subLang) { subKey = W + '|' + subs.length + subLang; subLines = []; let line = [], lw = 0;
+        for (const w of subs) { w.ew = ctx.measureText(w.en.toLowerCase()).width; w.sw = enOnly ? 0 : script ? script.width(w.w, hs) : ctx.measureText(w.w).width; w.cw = Math.max(w.ew, w.sw);
           if (line.length && (lw + gap + w.cw > maxW || line.length >= 5 || w.t0 - line[line.length - 1].t1 > .3)) { subLines.push(line); line = []; lw = 0; } lw += (line.length ? gap : 0) + w.cw; line.push(w); }
         if (line.length) subLines.push(line); }
       let li = 0; for (let i = 0; i < subLines.length; i++) if (subLines[i][0].t0 <= now + .05) li = i;
@@ -606,12 +606,12 @@ function create(canvas, opts) {
       const mxc = Math.max(...fa), mnc = Math.min(...fa), own = `rgb(${fa.map(v => Math.round(v * .6 + 255 * .4)).join(',')})`, glowOwn = `rgb(${C.feat})`, cf = fa.map(v => mxc + mnc - v), other = `rgb(${cf.map(v => Math.round(v * .6 + 255 * .4)).join(',')})`, glowOther = `rgb(${cf.join(',')})`;
       const lit = (fn, col, glow, blur) => { ctx.fillStyle = col; ctx.shadowColor = 'rgba(0,0,0,.95)'; ctx.shadowBlur = 5 * dpr; fn(); fn(); if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = blur * dpr; fn(); fn(); } ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; };
       const rrect = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
-      const bh = es * dpr + 8 * dpr + hs + 4 * dpr;
+      const bh = enOnly ? es * dpr + 4 * dpr : es * dpr + 8 * dpr + hs + 4 * dpr;   /* English alone when the creature speaks English */
       if (subStyle === 4) { rrect(cx - total * k / 2 - 14 * dpr, top - 9 * dpr, total * k + 28 * dpr, bh + 16 * dpr, 10 * dpr); ctx.shadowColor = glowOwn; ctx.shadowBlur = 14 * dpr; ctx.fillStyle = 'rgba(7,7,9,.84)'; ctx.fill(); ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.strokeStyle = `rgba(${C.feat},.8)`; ctx.lineWidth = dpr; ctx.stroke(); }
       if (subStyle < 3) { rrect(cx - total * k / 2 - 6 * dpr, top - 2 * dpr, total * k + 12 * dpr, bh + 2 * dpr, 12 * dpr); ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = 26 * dpr; ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.fill(); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; }   // a soft patch of dark behind the words, so they stand off the creature
       let x = cx - total * k / 2;
       line.forEach((w, i) => { const nx = line[i + 1], on = now >= w.t0 - .04 && now < (nx ? nx.t0 - .04 : w.t1 + .25), mid = x + w.cw * k / 2, en = w.en.toLowerCase(), sy2 = top + es * dpr + 8 * dpr;
-        const word = col => { ctx.fillStyle = col; ctx.font = mono(es * k, 600); ctx.fillText(en, mid, top); }, glyphs = col => { ctx.fillStyle = col; if (script) script.draw(ctx, w.w, mid - w.sw * k / 2, sy2, hs * k); else { ctx.font = `400 ${18 * k * dpr}px "Charis SIL", Georgia, serif`; ctx.fillText(w.w, mid, sy2); } };
+        const word = col => { ctx.fillStyle = col; ctx.font = mono(es * k, 600); ctx.fillText(en, mid, top); }, glyphs = col => { if (enOnly) return; ctx.fillStyle = col; if (script) script.draw(ctx, w.w, mid - w.sw * k / 2, sy2, hs * k); else { ctx.font = `400 ${18 * k * dpr}px "Charis SIL", Georgia, serif`; ctx.fillText(w.w, mid, sy2); } };
         if (subStyle === 4) { if (on) { rrect(x - 5 * dpr, top - 4 * dpr, w.cw * k + 10 * dpr, bh + 6 * dpr, 6 * dpr); ctx.fillStyle = own; ctx.fill(); } word(on ? '#060607' : 'rgba(255,255,255,.72)'); glyphs(on ? '#060607' : 'rgba(255,255,255,.72)'); }
         else if (subStyle === 3) { ctx.font = mono(es * k, 600); ctx.lineJoin = 'round'; ctx.strokeStyle = '#000'; ctx.lineWidth = 4 * dpr; ctx.strokeText(en, mid, top); word(on ? own : 'rgba(255,255,255,.75)'); lit(() => glyphs(on ? own : 'rgba(255,255,255,.75)'), on ? own : 'rgba(255,255,255,.75)', null, 0); }   // a hard dark edge, no glow
         else { const g = subStyle === 2 ? glowOther : glowOwn, c = subStyle === 2 ? other : own; lit(() => word(on ? '#fff' : 'rgba(255,255,255,.5)'), on ? '#fff' : 'rgba(255,255,255,.5)', g, on ? 14 : 5); lit(() => glyphs(on ? c : 'rgba(255,255,255,.7)'), on ? c : 'rgba(255,255,255,.7)', g, on ? 12 : 4); }
@@ -630,7 +630,7 @@ function create(canvas, opts) {
   window.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); if (!r.width) return;   // it watches the pointer
     ptr.x = clamp((e.clientX - (r.left + r.width / 2)) / Math.max(260, innerWidth * .45), -1, 1); ptr.y = clamp((e.clientY - (r.top + r.height / 2)) / Math.max(260, innerHeight * .5), -1, 1); ptr.t = T; }, { passive: true });
   setSeed(1); requestAnimationFrame(tick);
-  return { setPlate: (mode, video) => { plate = mode || null; backdrop = video || null; }, plate: () => plate, setSub: n => { subStyle = n; }, setFormat: f => { fmt = f && f[0] > 0 ? [f[0] | 0, f[1] | 0] : null; }, quality: () => quality, setSeed, setInfo: i => { info = { ...info, ...i }; }, speak, stop, dna: () => H.d, isSpeaking: () => !!speech };
+  return { setSubLang: l => { subLang = l === 'en' ? 'en' : 'both'; }, setPlate: (mode, video) => { plate = mode || null; backdrop = video || null; }, plate: () => plate, setSub: n => { subStyle = n; }, setFormat: f => { fmt = f && f[0] > 0 ? [f[0] | 0, f[1] | 0] : null; }, quality: () => quality, setSeed, setInfo: i => { info = { ...info, ...i }; }, speak, stop, dna: () => H.d, isSpeaking: () => !!speech };
 }
 window.XenoHead = { create, makeDNA };
 })();

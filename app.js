@@ -83,7 +83,7 @@ const MELODY={fall:'falling',rise:'rising',wave:'sing-song',tone:'tonal',flat:'l
 function makeAccent(r){ const f=(lo,hi)=>+(lo+r()*(hi-lo)).toFixed(2);
   return { stress:pick(r,['first','first','last','last','penult','penult','even']), stressLen:f(1.15,2.1), vLen:f(.78,1.35), cLen:f(.8,1.3), longV:r()<.5?f(.12,.38):0,
     melody:pick(r,['fall','rise','wave','wave','tone','tone','flat','step']), range:f(.6,2.1), gap:f(.3,1.9), tempo:f(.82,1.22), final:f(1.05,1.9), qRise:r()<.65 }; }
-const acc=()=>({...ACCENT0,...(L&&L.accent||{})});
+const acc=()=>L&&L.speakEnglish ? {...ACCENT0, melody:'flat'} : ({...ACCENT0,...(L&&L.accent||{})});   // speaking English, the alien accent is set aside: English brings its own rhythm
 // for one word: where its vowels are, which one is stressed, which are held long, and each syllable's tone
 function sylInfo(keys, A, w){ const vs=[]; keys.forEach((k,i)=>{ if(isV(k)) vs.push(i); }); const n=vs.length;
   const si=!n||A.stress==='even' ? -1 : A.stress==='last' ? n-1 : A.stress==='penult' ? Math.max(0,n-2) : 0;
@@ -93,7 +93,7 @@ function sylInfo(keys, A, w){ const vs=[]; keys.forEach((k,i)=>{ if(isV(k)) vs.p
 /* ---------- language state ---------- */
 const DEFAULT = { name:'Velnari', seed: 7741, inv: ['a','e','i','o','u','ë','p','t','k','d','g','m','n','ŋ','s','š','v','z','l','ř','j','x','c'],
   onset:.85, coda:.35, cluster:.12, maxSyl:4, voice:{pitch:150,speed:1,formant:1.12,breath:.3,jitter:.45,growl:0,choir:0,ring:0,vib:.15,space:.25},
-  style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{}, engine:'synth', accent:{...ACCENT0} };
+  style:'tendril', pen:'brush', weird:.35, slant:.1, gseed:20251102, weight:9, glyphs:{}, lexicon:{}, engine:'synth', accent:{...ACCENT0}, speakEnglish:false };
 const PRESETS = {
   'Elder giant':        {pitch:45,speed:.8,formant:.72,breath:.14,jitter:.61,growl:.35,choir:0,ring:0,vib:.04,space:.55},   // the voice every visitor starts with (chosen by Jas, Nov 2026)
   'Natural voice':      {pitch:130,speed:1,formant:1,breath:.22,jitter:.45,growl:0,choir:0,ring:0,vib:.1,space:.2},
@@ -221,9 +221,26 @@ function translate(text, keepNames){
     else if (m[5]) toks.push({t:'sp'});
     else toks.push({t:'o', s:m[6]});
   }
+  if(L&&L.speakEnglish&&engDict) toks.forEach(t=>{ if(t.t==='w'){ const e=englishSound(t.en); t.al=e.keys; t.ipa=e.ipa; t.eng=true; } });   // speaking English: the same words, with their English sounds
   return toks;
 }
 const toKeys = w => [...w.toLowerCase()].filter(k => PM[k]);
+/* ---------- speaking English: a pronouncing dictionary (CMUdict, 124,000 words, vendor/cmudict) gives each word's sounds.
+   The recorded voices get proper English IPA with the stress where it belongs; the built-in voice and the head's lip-sync get
+   the nearest of the creature's own sounds. Words it doesn't know are read letter by letter. Loaded only when English is chosen. */
+let engDict=null, engDictP=null;
+function loadEnglish(){ return engDictP ??= fetch('vendor/cmudict/cmudict.txt').then(r=>{ if(!r.ok) throw new Error('The English pronunciations didn’t load ('+r.status+').'); return r.text(); })
+  .then(t=>{ const m=new Map(); for(const ln of t.split('\n')){ const i=ln.indexOf(' '); if(i>0) m.set(ln.slice(0,i), ln.slice(i+1)); } engDict=m; return m; })
+  .catch(e=>{ engDictP=null; throw e; }); }
+const ARPA='AA AE AH AO AW AY EH ER EY IH IY OW OY UH UW B CH D DH F G HH JH K L M N NG P R S SH T TH V W Y Z ZH'.split(' '), ACODE='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM';
+const A_IPA={AA:'ɑ',AE:'æ',AH:'ʌ',AO:'ɔ',AW:'aʊ',AY:'aɪ',EH:'ɛ',ER:'ɚ',EY:'eɪ',IH:'ɪ',IY:'i',OW:'oʊ',OY:'ɔɪ',UH:'ʊ',UW:'u',B:'b',CH:'tʃ',D:'d',DH:'ð',F:'f',G:'ɡ',HH:'h',JH:'dʒ',K:'k',L:'l',M:'m',N:'n',NG:'ŋ',P:'p',R:'ɹ',S:'s',SH:'ʃ',T:'t',TH:'θ',V:'v',W:'w',Y:'j',Z:'z',ZH:'ʒ'};
+const A_KEY={AA:'a',AE:'ä',AH:'a',AO:'o',AW:'au',AY:'ai',EH:'e',ER:'ër',EY:'ei',IH:'i',IY:'i',OW:'ou',OY:'oi',UH:'u',UW:'u',B:'b',CH:'tš',D:'d',DH:'d',F:'f',G:'g',HH:'h',JH:'dž',K:'k',L:'l',M:'m',N:'n',NG:'ŋ',P:'p',R:'r',S:'s',SH:'š',T:'t',TH:'þ',V:'v',W:'w',Y:'j',Z:'z',ZH:'ž'};
+function englishSound(word){ const code=engDict&&engDict.get(word.toLowerCase().replace(/’/g,"'"));
+  if(!code) return {keys:toKeys(word).join(''), ipa:toKeys(word).map(k=>PM[k].ipa).join('')};
+  const ph=[]; for(let i=0;i<code.length;i++){ const p=ARPA[ACODE.indexOf(code[i])]; let st=-1; if(/[012]/.test(code[i+1]||'')) st=+code[++i]; ph.push({p,st}); }
+  const many=ph.filter(x=>x.st>=0).length>1;   /* stress marks go right before the stressed vowel, as in the voices' training (espeak style) */
+  let ipa='', keys=''; ph.forEach((x,i)=>{ if(many&&x.st===1) ipa+='ˈ'; else if(many&&x.st===2) ipa+='ˌ'; ipa+=x.p==='AH'&&x.st===0?'ə':A_IPA[x.p]; keys+=x.p==='AH'&&x.st===0?'ë':A_KEY[x.p]; });
+  return {keys, ipa}; }
 const ipaOf = w => toKeys(w).map(k => PM[k].ipa).join('');
 
 /* ---------- speech synth ---------- */
@@ -282,7 +299,7 @@ function wordsToSegs(words, voice, t0=0.12){
 function tokensToWords(toks){
   const out=[];
   toks.forEach(tk => {
-    if (tk.t==='w') out.push({al:tk.al, en:tk.en});
+    if (tk.t==='w') out.push({al:tk.al, en:tk.en, ipa:tk.ipa});
     else if (tk.t==='p' || tk.t==='nl') { const s = tk.t==='nl' ? '.' : tk.s; const end = /\?/.test(s)?'?': /[.!;:]/.test(s)?'.':','; if (out.length) out[out.length-1].end = end; }
   });
   return out;
@@ -460,8 +477,8 @@ async function piperVoice(id){
   if(piper[id]) return piper[id];
   if(inArtifact()) throw new Error('The natural voice needs the hosted site (xenoglot.jas.black). Using the built-in voice here.');
   return piper[id]=(async()=>{ try{
-    const v=NATURAL[id]; naturalStatus('loading the voice engine…'); const O=await loadOrt();
-    const progress=(g,t)=>naturalStatus(t>1?`downloading ${v.label}: ${(g/1e6).toFixed(0)} / ${(t/1e6).toFixed(0)} MB (once, then it works offline)`:'loading the voice…');
+    const v=NATURAL[id]; naturalStatus('loading the voice engine…'); speakBusy('loading voice'); const O=await loadOrt();
+    const progress=(g,t)=>{ naturalStatus(t>1?`downloading ${v.label}: ${(g/1e6).toFixed(0)} / ${(t/1e6).toFixed(0)} MB (once, then it works offline)`:'loading the voice…'); speakBusy(t>1?`loading voice ${Math.round(g/t*100)}%`:'loading voice'); };
     let cfg, style=null;
     if(v.kind==='kokoro'){
       const tok=JSON.parse(new TextDecoder().decode(await fetchCached(KOKORO+'tokenizer.json')));
@@ -469,17 +486,17 @@ async function piperVoice(id){
       style=new Float32Array(await fetchCached(v.style));
     } else cfg=JSON.parse(new TextDecoder().decode(await fetchCached(v.url+'.onnx.json')));
     // both Kokoro voices share one model, so its session is shared too
-    const key=modelUrl(v); sessions[key] ??= (async()=>{ const model=await fetchCached(key,progress); naturalStatus('starting the voice…'); return O.InferenceSession.create(model,{executionProviders:['wasm']}); })();
+    const key=modelUrl(v); sessions[key] ??= (async()=>{ const model=await fetchCached(key,progress); naturalStatus('starting the voice…'); speakBusy('starting voice'); return O.InferenceSession.create(model,{executionProviders:['wasm']}); })();
     let sess; try{ sess=await sessions[key]; }catch(e){ delete sessions[key]; throw e; }
-    naturalStatus(`${v.label} ready`); voiceReady[id]=true; setTimeout(updateEst); return {sess,cfg,O,style,kind:v.kind};
-  }catch(e){ delete piper[id]; naturalStatus(''); throw e; } })(); }
+    naturalStatus(`${v.label} ready`); voiceReady[id]=true; setTimeout(updateEst); speakBusy(''); return {sess,cfg,O,style,kind:v.kind};
+  }catch(e){ delete piper[id]; naturalStatus(''); speakBusy(''); throw e; } })(); }
 // a word in IPA for the neural voices: the stress mark goes where this language's accent puts it, and long vowels get a length mark
 function wordIpa(w){ const keys=toKeys(w); if(!keys.length) return ''; const si=sylInfo(keys,acc(),w); let at=-1, out='';
   if(si.stressAt>=0){ at=si.stressAt; while(at>0 && !isV(keys[at-1])) at--; if(at>0 && si.stressAt-at>1) at++; }   /* of two consonants between vowels, the first closes the syllable before */
   keys.forEach((k,i)=>{ if(i===at) out+='ˈ'; out+=PM[k].ipa; const j=si.vs.indexOf(i); if(j>=0 && si.long[j]) out+='ː'; }); return out; }
 // phrases of IPA, punctuation kept for phrasing
 function ipaPhrases(words){ const out=[]; let cur=[], ws=[];
-  words.forEach(w=>{ const ipa=wordIpa(w.al); if(ipa){ cur.push(ipa); ws.push({al:w.al,en:w.en}); }
+  words.forEach(w=>{ const ipa=w.ipa||wordIpa(w.al); if(ipa){ cur.push(ipa); ws.push({al:w.al,en:w.en}); }
     if(w.end){ if(cur.length) out.push({ipa:cur.join(' ')+(w.end===','?',':w.end==='?'?'?':'.'), end:w.end, words:ws}); cur=[]; ws=[]; } });
   if(cur.length) out.push({ipa:cur.join(' ')+'.', end:'.', words:ws}); return out; }
 // A neural voice brings its own tune. The language's melody is laid over it as a gentle pitch bend across each phrase (cents).
@@ -526,11 +543,11 @@ async function naturalRun(V, ipa, lengthScale, voice){ const {sess,cfg,O,style,k
   if(parts.length===1) return parts[0];
   const n=parts.reduce((a,c)=>a+c.length,0), raw=new Float32Array(n); let o=0; for(const c of parts){ raw.set(c,o); o+=c.length; } return raw; }
 async function speakNatural(words, voice){
-  voice={...DEFAULT.voice,...voice}; const V=await piperVoice(L.engine), v=NATURAL[L.engine], sr=V.cfg.audio.sample_rate;
+  voice={...DEFAULT.voice,...voice}; const V=await piperVoice(L.engine), v=NATURAL[L.engine], sr=V.cfg.audio.sample_rate; speakBusy('making speech');
   const rate=voiceRate(voice,v), lengthScale=Math.min(2.5,Math.max(.4, rate/(voice.speed*acc().tempo)*(v.len||1)));
   const clips=[], segs=[]; let t=0;
   for(const ph of ipaPhrases(words)){ const raw=await naturalRun(V, ph.ipa, lengthScale, voice); if(!raw.length) continue;
-    const d=raw.length/sr/rate; clips.push({raw,t,curve:voice.fitting?null:melodyCurve(d,ph.end,ph.ipa)}); segs.push(...spreadSegs(ph.words,t+.03,d-.08)); t+=d+(ph.end===','?.12:.3)*lengthScale/rate; }
+    const d=raw.length/sr/rate; clips.push({raw,t,curve:voice.fitting||L.speakEnglish?null:melodyCurve(d,ph.end,ph.ipa)}); segs.push(...spreadSegs(ph.words,t+.03,d-.08)); t+=d+(ph.end===','?.12:.3)*lengthScale/rate; }
   if(!clips.length) throw new Error('Nothing to say yet. Type some English first.');
   const b=await naturalFx(clips, sr, voice, rate, t); b.timeline={segs}; return b;
 }
@@ -577,7 +594,7 @@ async function speakWords(words, speedMul=1, fitting=false){
     const led=$('#ledVoice'); led&&led.classList.add('on');
     try{ return await speakNatural(words, voice); }
     catch(e){ toast(e.message||'The natural voice failed, so the built-in voice is speaking.'); }
-    finally{ if(led&&!playing) led.classList.remove('on'); }
+    finally{ speakBusy(''); if(led&&!playing) led.classList.remove('on'); }
   }
   const {segs,dur}=wordsToSegs(words, voice), b=await render(segs,dur,voice); b.timeline={segs}; return b;
 }
@@ -594,7 +611,11 @@ const headScript={ width:(word,h)=>toKeys(word).length*100*h/128,
 const signature=new Image(); signature.src='jasblack.webp';   // the JAS.BLACK wordmark, drawn on the monitor as a signature
 const head = window.XenoHead && $('#headCanvas') ? XenoHead.create($('#headCanvas'), {sounds:PM, script:headScript, signature}) : null;
 let headSeed=null;
-function speakKey(on){ const k=$('#tSpeak'); if(!k) return; k.innerHTML=on?'&#x25A0; stop':'&#x25B6; speak'; k.classList.toggle('playing',on); }
+// while a voice downloads or a slow voice works, the speak key says so, with a spinner
+let busyMsg='';
+function speakBusy(msg){ busyMsg=msg||''; const k=$('#tSpeak'); if(!k) return; k.classList.toggle('busy',!!busyMsg);
+  if(busyMsg) k.innerHTML=`<span class="spin" aria-hidden="true"></span> ${esc(busyMsg)}`; else speakKey(!!playing); }
+function speakKey(on){ const k=$('#tSpeak'); if(!k||busyMsg) return; k.innerHTML=on?'&#x25A0; stop':'&#x25B6; speak'; k.classList.toggle('playing',on); }
 function applyHead(){ if(!head) return; if(headSeed!==L.head){ headSeed=L.head; head.setSeed(L.head>>>0); $('#headCanvas').dataset.seed=String(L.head>>>0); } head.setInfo({name:L.name||''}); }
 function stopAudio(){ if(head) head.stop(); $('#ledVoice').classList.remove('on'); speakKey(false); if(playing){ try{ playing.src.stop(); }catch(e){} cancelAnimationFrame(playing.raf); const p=playing; playing=null; p.done&&p.done(); } }
 let speechMute=false;
@@ -938,13 +959,14 @@ let lastT=null;
 function renderTranslate(){
   const toks=translate($('#enText').value, $('#keepNames').checked); lastT=toks; tBuf=null; drawWave($('#waveT'),null);
   const rtl=(document.querySelector('input[name=dir]:checked')||{}).value==='rtl';
-  $('#outRoman').innerHTML=toks.map(t=>t.t==='w'?`<span class="w" title="${esc(t.en)}">${esc(t.al)}</span>`:t.t==='nl'?'<br>':t.t==='sp'?' ':esc(t.s)).join('');
+  const eng=!!(L.speakEnglish&&engDict); $('#tOutTitle').textContent=eng?'in english':'in its language'; $('#outScript').hidden=eng;
+  $('#outRoman').innerHTML=toks.map(t=>t.t==='w'?`<span class="w" title="${esc(eng?'/'+t.ipa+'/':t.en)}">${esc(eng?t.en:t.al)}</span>`:t.t==='nl'?'<br>':t.t==='sp'?' ':esc(t.s)).join('');
   const sc=$('#outScript'); sc.classList.toggle('rtl',rtl);
   sc.innerHTML=toks.filter(t=>t.t!=='sp').map(t=>t.t==='w'?wordSVG(t.al,rtl):t.t==='nl'?'<span style="flex-basis:100%"></span>':`<span class="pn">${esc(t.s)}</span>`).join('');
-  $('#outIpa').textContent='/'+toks.filter(t=>t.t==='w').map(t=>ipaOf(t.al)).join(' ')+'/';
+  $('#outIpa').textContent='/'+toks.filter(t=>t.t==='w').map(t=>t.ipa||ipaOf(t.al)).join(' ')+'/';
   updateEst();
 }
-const romanText=()=>(lastT||[]).map(t=>t.t==='w'?t.al:t.t==='nl'?'\n':t.t==='sp'?' ':t.s).join('');
+const romanText=()=>(lastT||[]).map(t=>t.t==='w'?(t.eng?t.en:t.al):t.t==='nl'?'\n':t.t==='sp'?' ':t.s).join('');
 let tBuf=null;
 /* ---------- length: an estimate as you type, and "fit to a length" ----------
    The built-in voice's length is known exactly from wordsToSegs. The natural voice's length is that times a
@@ -987,7 +1009,8 @@ async function makeSpeech(){
   const secs=(performance.now()-t0)/1000; pace.work[eng]=pace.work[eng]*.5+(secs/passes/Math.max(.5,buf.duration))*.5;
   store.set('xenoglot-v1-pace',JSON.stringify(pace)); updateEst();
   return {buf,secs}; }
-async function getTBuf(){ if(!tBuf){ $('#tStatus').textContent='synthesizing…'; setStatus('synthesizing…');
+async function getTBuf(){ if(L.speakEnglish && !engDict){ speakBusy('loading english'); try{ await loadEnglish(); } finally{ speakBusy(''); } renderTranslate(); }
+  if(!tBuf){ $('#tStatus').textContent='synthesizing…'; setStatus('synthesizing…');
     const {buf,secs}=await makeSpeech(); tBuf=buf; drawWave($('#waveT'),tBuf,-1);   // the wave shows however the speech was made
     const msg=`${fmtS(tBuf.duration)} of speech${fit.on?` (asked for ${fmtS(fit.secs)})`:''} · made in ${fmtS(secs)}`;
     $('#tStatus').textContent=msg; setStatus(msg); } return tBuf; }
@@ -1220,7 +1243,7 @@ async function playSample(){ if(playSample.busy) return; playSample.busy=true; c
   catch(e){ toast(e&&e.message||'The sample didn’t play.'); }
   finally { playSample.busy=false; k.innerHTML=was; } }
 $('#vTry').addEventListener('click',playSample);
-function syncSliders(){ renderAccent(); SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
+function syncSliders(){ renderAccent(); applyLang(); SL.forEach(([i,o,get,,f])=>{ $(i).value=get(); $(o).textContent=f(get()); setPct($(i)); }); markChip($('#gStyle'),L.style); markChip($('#gPen'),L.pen); renderEngine(); markChip($('#vPreset'),presetOf()); sideLcd(); $('#langName').value=L.name; $('#fontName').value=L.name+' Script'; $('#gId').textContent='Alphabet #'+(L.gseed>>>0).toString(36).toUpperCase(); }
 
 /* ---------- state changes ---------- */
 let rerenderT=0;
@@ -1231,6 +1254,10 @@ function renderAccent(){ const el=$('#accentInfo'); if(!el) return; const A=acc(
   el.innerHTML=`<span><b>${MELODY[A.melody]}</b> melody${A.melody==='flat'?'':', '+(A.range>1.5?'wide':A.range<.95?'narrow':'medium')+' range'} · ${stress} · ${A.longV?'long and short vowels':'vowels all one length'} · ${A.gap<.8?'words run together':A.gap>1.35?'words set apart':'even spacing'} · ${A.tempo>1.08?'quick':A.tempo<.93?'slow':'steady'}</span>`; }
 $('#accentNew').addEventListener('click',()=>{ L.accent=makeAccent(rngFrom(Math.random()*4e9)); tBuf=null; saveLang(); renderAccent(); sideLcd(); playSample(); });
 const START_VOICE='Elder giant';
+// what it speaks: its own language, or English
+function applyLang(){ const en=!!L.speakEnglish; markChip($('#tLang'), en?'en':'alien'); head&&head.setSubLang(en?'en':'both');
+  if(en && !engDict) loadEnglish().then(()=>{ renderTranslate(); updateCounts(); }).catch(e=>toast(e.message)); else renderTranslate(); }
+$('#tLang').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return; L.speakEnglish=b.dataset.v==='en'; tBuf=null; saveLang(); applyLang(); });
 function randomVoice(r){ const speechy=['Natural voice','Soft and breathy','Giant','Small creature','Ethereal','Gravel beast','Hive choir','Deep ocean','Glass child','Stone elder','Wind spirit','Cathedral','Dream voice','Throat singer','Swarm queen','Little bell']; const base=PRESETS[pick(r, r()<.8?speechy:Object.keys(PRESETS))]; const j=(v,a,lo,hi)=>+Math.max(lo,Math.min(hi,v+(r()-.5)*a)).toFixed(2);
   return {...base,pitch:Math.round(j(base.pitch,90,45,400)),formant:j(base.formant,.35,.6,1.7),breath:j(base.breath,.3,0,1),jitter:j(base.jitter,.3,0,1),vib:j(base.vib,.3,0,1)}; }
 function randomLanguage(){
@@ -1385,7 +1412,7 @@ $('#ovOffset').addEventListener('input',e=>{ back.offset=+e.target.value; $('#oO
 $('#ovOwn').addEventListener('change',e=>{ back.own=e.target.checked; });
 $('#ovSubs').addEventListener('click',()=>recordVideo({subsOnly:true}));
 // subtitles as a file: the same lines as on screen, timed to the speech (shifted by the offset when your video is in)
-$('#ovSrt').addEventListener('click',async()=>{ const buf=(!$('#v-audio').hidden && dBuf) ? dBuf : await getTBuf(), segs=(buf.timeline&&buf.timeline.segs)||[], kind=$('#ovSrtKind').value, sh=back.vid?back.offset:0;
+$('#ovSrt').addEventListener('click',async()=>{ const buf=(!$('#v-audio').hidden && dBuf) ? dBuf : await getTBuf(), segs=(buf.timeline&&buf.timeline.segs)||[], kind=L.speakEnglish?'en':$('#ovSrtKind').value, sh=back.vid?back.offset:0;
   const words=[]; let cur=null; for(const s of segs){ if(s.k&&s.w){ if(!cur){ cur={w:s.w,en:s.en||'',t0:s.t,t1:s.t+s.d}; words.push(cur); } else cur.t1=s.t+s.d; } else cur=null; }
   const lines=[]; let ln=[]; words.forEach((w,i)=>{ ln.push(w); const nx=words[i+1], len=ln.reduce((a,x)=>a+Math.max(x.w.length,x.en.length)+1,0); if(!nx||ln.length>=6||len>34||nx.t0-w.t1>.3){ lines.push(ln); ln=[]; } });
   const ts=t=>{ t=Math.max(0,t+sh); const h=Math.floor(t/3600), m=Math.floor(t%3600/60), s=Math.floor(t%60), ms=Math.round((t%1)*1000)%1000; return [h,m,s].map(x=>String(x).padStart(2,'0')).join(':')+','+String(ms).padStart(3,'0'); };
@@ -1397,7 +1424,7 @@ $('#headShare').addEventListener('click',async()=>{ if(!videoKeep) return; try{ 
 
 /* ---------- first visit: a short welcome; on phones the language library folds away ---------- */
 if(!store.get('xenoglot-v1-seen')) $('#intro').hidden=false;
-const closeIntro=()=>{ $('#intro').hidden=true; store.set('xenoglot-v1-seen','1'); };
+const closeIntro=()=>{ $('#intro').hidden=true; store.set('xenoglot-v1-seen','1'); window.scrollTo({top:0,behavior:'smooth'}); };   // back up to the creature
 $('#introClose').addEventListener('click',closeIntro);
 $('#introSpeak').addEventListener('click',()=>{ closeIntro(); location.hash='translate'; speakNow(); });
 const setLib=open=>{ $('.langpanel').classList.toggle('open',open); $('#langToggle').setAttribute('aria-expanded',open); };
@@ -1431,7 +1458,7 @@ document.addEventListener('contextmenu',e=>{ const el=e.target; if(e.defaultPrev
 
 
 /* ---------- transport + shortcuts ---------- */
-async function speakNow(){ if(playing){ stopAudio(); backPause(); return; } getCtx(); if(!lastT) renderTranslate(); const buf=await getTBuf(); await backStart(); speechMute=!!(back.vid&&back.own); play(buf, $('#v-translate').hidden?false:$('#waveT')); }
+async function speakNow(){ if(playing){ stopAudio(); backPause(); return; } if(busyMsg) return;   /* still loading: one press is enough */ getCtx(); if(!lastT) renderTranslate(); const buf=await getTBuf(); await backStart(); speechMute=!!(back.vid&&back.own); play(buf, $('#v-translate').hidden?false:$('#waveT')); }
 $$('[data-proxy]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.proxy).click()));
 document.addEventListener('keydown',e=>{ if(e.metaKey||e.ctrlKey||e.altKey) return; const t=e.target; if(t.closest&&t.closest('input,textarea,select,[contenteditable]')) return;
   if(e.code==='Space'){ e.preventDefault(); speakNow(); }
