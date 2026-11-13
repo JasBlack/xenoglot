@@ -19,7 +19,7 @@ A JAS.BLACK console tool for inventing spoken alien languages on English grammar
 - `examples/`: example languages plus `index.json` (the list shown under Examples).
 - `tests/smoke.mjs`: Playwright smoke test, offline (`npm test`). `tests/models.mjs`: speech-to-text, natural voices and conversion with the real models (`npm run test:models`; needs Hugging Face, or `XENOGLOT_HF=http://127.0.0.1:PORT/` for a local mirror that serves files by name).
 - `.github/workflows/test.yml`: runs `npm test` on pushes to main and on pull requests.
-- Icons, `og.jpg` (built from the tool's own screen), `site.webmanifest`, `CNAME`, `.nojekyll`.
+- Icons (the family icon pack: a ringed planet), `og.jpg` (the jas.black tool card: icon, title, line and the live creature, head 1091), `site.webmanifest`, `CNAME`, `.nojekyll`.
 
 ## Commands
 - Run: `python3 -m http.server 8000` → http://localhost:8000
