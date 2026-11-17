@@ -36,12 +36,18 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - Words are deterministic: a word comes from `hash(seed + word)`, so the same language always gives the same words. Changing `makeSyl`/`makeWord`/`langWeights` changes every saved language's words. Version 1.2.0 did this once, before launch. After launch, keep the old generator behind a `gen` field on the language rather than changing it in place. Glyphs come from `gseed` + style + weirdness, and hand-drawn letters are stored as points.
 
 ## Status
-- Works: everything above; desktop and phone layouts (bottom tab bar under 850 px, library folded behind one key); light/dark; right-click slider reset; Space/N/1–5 shortcuts; save/open/share/examples/drag-drop; first-visit welcome; home is the translate step.
+- Works: everything above; desktop and phone layouts (bottom tab bar under 850 px, library folded behind one key); light/dark; right-click setting reset; Space/N shortcuts; save/open/share/examples/drag-drop; first-visit welcome; home is the translate step.
 - Verified (2.0.0): speech-to-text hears the JFK sample word for word, in two timed phrases, 11 s of audio in under 3 s. A 56 s track crossing two 30 s windows gives 8 correct phrases in 8 s. Converted speech lines up with the original within 0.1 s (built-in voice). All checked in headless Chromium with models from a local mirror.
 - Verified (Nov 2026): fonts from every style/pen pass fontTools and OTS (the browsers' font sanitizer), with 80 characters (all letters in both cases, space and `! ' , - . ?`). An 8-minute speech-like track converts in about 14 s (4 s analysis, 10 s render) in headless Chromium, with phrase and syllable counts exact (190/190, 1544/1544). The JS heap peaks around 435 MB.
 - Verified (1.3.0): both natural voices load and speak in headless Chromium. Model start is about 11–16 s, excluding the download. Three sentences generate in 4–5 s, about 2× real time, single-threaded wasm. Audio levels are healthy and there are no errors. The models were served from local copies in the test, so the real Hugging Face download and Cache Storage reuse in a browser are untested.
 - Known issues: the natural voice is an English-trained model, so non-English sounds (y, ø, ɯ, clicks, ɬ) come out approximated. Audio-track conversion and recorded sounds stay on the built-in synth. Long tracks near the 10-minute cap may be heavy for older phones.
 - Unverified: the .otf installing on macOS/Windows (it passes OTS, but no OS install was tried); mic recording on iOS Safari; the share sheet (`navigator.share` with files) on a real phone; video recording as H.264 .mp4 (headless Chromium has no H.264 encoder, so tests got .webm); how the head and the voices look and sound to a person.
+
+## Family rules (2.8.1, Nov 2026)
+- One purple, `#8b6cff` (`--accent2` and `--value`, both themes; the waveform playhead). The creature's own violet in head.js (`VIOLET`, the family palette 15% of the time) is artwork and stays.
+- Dot grid, option B: the family's 32 px tile drawn at 16 px (`--dotgrid`, dark and light tiles), never a CSS gradient.
+- Key-hint bar at the bottom of the page (`footer.keys`, as in Align): `space` speak · `N` new language, and "right-click a setting resets it". Hidden on touch-only phones.
+- No numbered step badges (Xenoglot has no easy mode); panel titles stay plain.
 
 ## Layout and simplification (2.2.0)
 - One of everything: one speak key (`#tSpeak`, under the head; it toggles to stop and jumps to the speak section), one new-language key, save audio (`#headAudio`, the .mp3 of the speech, or of the converted track on the audio section) and save video under the head, save/open/share only in the library. The top-bar transport, the status LEDs (kept hidden: the code still lights them), the numbered steps, the panel numbers, the next-step keys and the 1–5 shortcuts are gone. Space and N remain.
@@ -144,7 +150,7 @@ GitHub Pages from `main`, root folder. `CNAME` = `xenoglot.jas.black`. Repo `Jas
 - When measuring a sound with `__xg.run`, the first `[null,.05]` segment shifts everything by 50 ms. Measure from 0.10 s.
 - `[hidden]{display:none!important}` must stay in `style.css`: `.view{display:grid}` otherwise shows every step at once.
 - Phone layout: `main.console` is a flex column with `align-items:stretch`, and `.lcd.block span` must wrap. The family `.lcd span{white-space:nowrap}` once pushed the page to 834 px wide.
-- Right-click reset defaults are captured after a language loads (`captureDefaults()`), not at script start, or they reset to the slider midpoint.
+- Right-click reset defaults are captured after a language loads (`captureDefaults()`), not at script start, or they reset to the slider midpoint. That covers the language's own settings: sliders, the chip groups `tLang vEngine vPreset gStyle gPen`, and the sound keys (by sound, since the grid is redrawn). Page preferences (`vFmt`, checkboxes, the `dir` radios, `#ovSrtKind`) take their default once, at `load`. `resetSetting` clicks the default chip or key, or sets the field and fires input + change, so the app reacts as to a user's change. Action keys and the library picker keep the normal menu.
 - Downloads use `window.claude.use('downloads')` when hosted as a claude.ai artifact, else a normal `<a download>`. The artifact allowlist has no .otf or .wav, so there the font saves as .ttf and audio records to .webm in real time. The hosted site uses .otf and .wav.
 - opentype.js 1.3.4 writes only a glyph's first code point into `cmap`. Capitals need their own glyph copy, not `unicodes:[…]`.
 - Threads: with cross-origin isolation, Kokoro only got about 20% faster (18 → 15 s), so no service worker is used to force isolation on GitHub Pages.

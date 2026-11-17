@@ -8,16 +8,17 @@
    ───────────────────────────────────────────────────────────────────────────── */
 :root{ color-scheme:dark; background:#121314; }
 body{
-  --accent:#39ff88; --accent2:#b36bff; --rec:#ff3b30;
+  --accent:#39ff88; --accent2:#8b6cff; --rec:#ff3b30;
   --case:#121314; --panel:#18191b; --line:#26272a;
   --key:#222326; --keyon:#1b1c1e; --keyline:#303135; --shadow:#070708;
   --text:#e4e4e1; --muted:#929399; --track:#2e2f33; --well:#141517;
-  --ink:#e4e4e1; --inktext:#121314; --knob:#2c2d31; --ledoff:#34353a; --value:#b36bff;
+  --ink:#e4e4e1; --inktext:#121314; --knob:#2c2d31; --ledoff:#34353a; --value:#8b6cff;
   --stage:#0b0b0c; --stagetext:#e4e4e1;
   --wide:'Archivo','Arial Black','Helvetica Neue',Arial,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
   --lang:'Charis SIL','Doulos SIL','Gentium Plus',Georgia,serif;
-  --dotgrid:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAUklEQVR42u3TMQ6AMAgF0N/q1PuftZOmLr0CMZr3EgYWCAQSAAAAgDe0qsJrrSPJ2Olsrd0VfXrhckaSc8eoatK/fkKVA8wk147pWwEAAIB/eQDMfgkI7Qnw3wAAAABJRU5ErkJggg==');
+  /* the family dot grid, option B: 16 px, fine and faint (a 32 px tile drawn at 16 px) */
+  --dotgrid:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAATElEQVR42u3OOQrAQAxDUSlp5v6ndROcRhcYM6TJf+DCAi8SAAB/5+lgd9+SVtqy/Uz2XMPjznGnVrJvHjhp9IDtllSSOlXJAADAthcsBBEI93xN9gAAAABJRU5ErkJggg==');
   --tap:30px;
   color-scheme:dark;
 }
@@ -26,8 +27,8 @@ body[data-ui=light]{
   --case:#e7e7e4; --panel:#efefec; --line:#d6d6d2;
   --key:#fafaf8; --keyon:#ececea; --keyline:#cfcfcb; --shadow:#bdbdb8;
   --text:#1b1b1d; --muted:#686864; --track:#d0d0cc; --well:#e4e4e1;
-  --ink:#1b1b1d; --inktext:#f2f2ef; --knob:#fafaf8; --ledoff:#cdcdc9; --value:#7943b3;
-  --dotgrid:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAVklEQVR42u3TOQqAUAwFwOcGtoL3v6KVjYrY/CsEUWaqVAnZEgAAAIA3dIW5pyRLi7ckZ0WRobCBNcmcZGzN7BVF+q+fUOUGjjb5q53Q7WMBAACA/3gAsAsHDMExuscAAAAASUVORK5CYII=');
+  --ink:#1b1b1d; --inktext:#f2f2ef; --knob:#fafaf8; --ledoff:#cdcdc9; --value:#8b6cff;
+  --dotgrid:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAUklEQVR42u3SPQrAMAhA4ZeGDl2a+5+za/qzeIJYWgLvA8FFURQkSZpciRhWE7Ur0IAN6MA10mRJbL7HAjXy8uUAr8mcoMcZbuAAzimfUJKk3z3AAQY6ol938gAAAABJRU5ErkJggg==');
 }
 
 /* ── page ── */
@@ -35,7 +36,7 @@ body[data-ui=light]{
 [hidden]{display:none!important}
 img{max-width:100%}
 body{
-  margin:0; background:var(--dotgrid) 0 0/24px 24px,var(--case); color:var(--text);
+  margin:0; background:var(--dotgrid) 0 0/16px 16px,var(--case); color:var(--text);
   font:11px/1.5 var(--mono); -webkit-font-smoothing:antialiased;
   padding:12px max(12px,env(safe-area-inset-right,0px)) 16px max(12px,env(safe-area-inset-left,0px));
   display:flex; flex-direction:column; gap:12px; min-height:100%;
@@ -89,7 +90,7 @@ header.topbar::before{content:"";position:absolute;inset:-12px -12px -6px;backgr
 .status span{display:flex;gap:6px;align-items:center}
 .led{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ledoff);flex:none}
 .led.on{background:var(--accent);box-shadow:0 0 4px #39ff8877}
-.led.p.on{background:var(--accent2);box-shadow:0 0 4px #b36bff77}
+.led.p.on{background:var(--accent2);box-shadow:0 0 4px #8b6cff77}
 .led.rec.on{background:var(--rec);box-shadow:0 0 5px var(--rec)}
 
 /* ── layout: left column · the active step ── */
@@ -126,7 +127,6 @@ header.topbar,main.console,.column,.view,.panel>*{min-width:0}
 .panel{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 12px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .panel h2{margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;font:400 9px/1.3 var(--mono);letter-spacing:.2em;text-transform:uppercase}
 .panel h2 > span:first-child{font-weight:600;display:flex;gap:8px;align-items:center}
-.panel h2 i{font-style:normal;width:18px;height:18px;display:inline-grid;place-items:center;background:var(--accent);color:#0b0b0c;border-radius:50%;font-size:10px;font-weight:600;letter-spacing:0;flex:none}
 .panel h2 > span + span{font-size:7.5px;color:var(--muted);letter-spacing:.15em;text-align:right}
 .hint{font-size:9px;color:var(--muted);margin:0;line-height:1.6;max-width:74ch}
 .hint:empty{display:none}
@@ -139,8 +139,10 @@ header.topbar,main.console,.column,.view,.panel>*{min-width:0}
 .lcd b{color:var(--stagetext);font-weight:500}
 .lcd .dim{color:#929399}
 .lcd span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-footer.keys{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;font-size:8px;color:var(--muted);padding:2px 4px}
-kbd{display:inline-block;border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-right:4px;font:500 8px/1.6 var(--mono);color:var(--text);letter-spacing:.06em;text-transform:uppercase;background:var(--case)}
+/* the family key-hint bar (as in Align): one line of small raised keys along the bottom */
+footer.keys{flex:none;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:8.5px;color:var(--muted);letter-spacing:.08em;padding:2px 4px;max-width:1280px;width:100%;margin:0 auto}
+kbd{display:inline-block;min-width:14px;padding:0 4px;margin:0 1px;border-radius:3px;border:1px solid var(--keyline);background:var(--key);box-shadow:0 1px 0 var(--shadow);font:500 8.5px/14px var(--mono);color:var(--text);text-align:center}
+@media (hover:none) and (pointer:coarse){footer.keys{display:none}}
 
 /* ── controls ── */
 .control{display:grid;gap:5px}

@@ -639,7 +639,7 @@ function drawWave(cv, buf, pos){
   g.fillStyle='#39ff88';
   for(let x=0;x<W;x++){ let mn=0,mx=0; for(let i=x*step;i<(x+1)*step&&i<d.length;i++){ const v=d[i]; if(v<mn)mn=v; if(v>mx)mx=v; } g.globalAlpha = pos>=0 && x/W>pos ? .35 : 1; g.fillRect(x,H/2-mx*H/2,1,Math.max(1,(mx-mn)*H/2)); }
   g.globalAlpha=1;
-  if(pos>=0){ g.fillStyle='#b36bff'; g.fillRect(pos*W,0,2*devicePixelRatio,H); }
+  if(pos>=0){ g.fillStyle='#8b6cff'; g.fillRect(pos*W,0,2*devicePixelRatio,H); }
 }
 let dl=null; try{ window.claude?.use?.('downloads').then(d=>{ dl=d; }).catch(()=>{}); }catch(e){}
 async function saveFile(filename, data){
@@ -1451,10 +1451,23 @@ setUI(store.get('xenoglot-ui')==='light'?'light':'dark');
 const VERSION=document.body.dataset.version||'1.0.0'; $('.brand-ver').textContent='v'+VERSION;
 const paintRange=el=>el.style.setProperty('--pct',((el.value-el.min)/((el.max-el.min)||1)*100)+'%');
 document.addEventListener('input',e=>{ if(e.target.type==='range') paintRange(e.target); });
-const rangeDefaults=new WeakMap();
-const captureDefaults=()=>$$('input[type=range]').forEach(el=>{ rangeDefaults.set(el,el.value); paintRange(el); });
-document.addEventListener('contextmenu',e=>{ const el=e.target; if(e.defaultPrevented||!(el instanceof HTMLInputElement)||el.type!=='range'||el.disabled) return;
-  e.preventDefault(); const d=rangeDefaults.get(el)??el.defaultValue; if(el.value===d) return; el.value=d; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); });
+/* right-click any setting returns it to its default (family rule): sliders, chip groups of options, sound keys, checkboxes, radios, selects. Action keys keep the normal menu.
+   Settings that belong to the language (sliders, what it speaks, voice, character, style, pen, sounds) take their default when a language loads (captureDefaults);
+   the page's own preferences (video shape, checkboxes, radios, .srt kind) take theirs once, when the page has loaded. */
+const rangeDefaults=new WeakMap(), groupDefaults=new Map(), LANG_GROUPS=['tLang','vEngine','vPreset','gStyle','gPen'], PAGE_GROUPS=['vFmt'];
+const pressedOf=g=>{ const b=$$('.chip',g).find(x=>x.getAttribute('aria-pressed')==='true'); return b?b.dataset.v:null; };
+const fieldVal=el=>el.type==='checkbox'||el.type==='radio'?el.checked:el.value;
+const captureDefaults=()=>{ $$('input[type=range]').forEach(el=>{ rangeDefaults.set(el,el.value); paintRange(el); });
+  LANG_GROUPS.forEach(id=>groupDefaults.set(id,pressedOf($('#'+id)))); $$('.snd .main').forEach(b=>groupDefaults.set('snd:'+b.closest('.snd').dataset.k,b.getAttribute('aria-pressed'))); };
+addEventListener('load',()=>{ PAGE_GROUPS.forEach(id=>groupDefaults.set(id,pressedOf($('#'+id)))); $$('input[type=checkbox], input[type=radio], #ovSrtKind').forEach(el=>rangeDefaults.set(el,fieldVal(el))); });
+const fire=el=>{ el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };
+function resetSetting(t){
+  const snd=t.closest('.snd .main'); if(snd){ const d=groupDefaults.get('snd:'+snd.closest('.snd').dataset.k); if(d==null) return false; if(snd.getAttribute('aria-pressed')!==d) snd.click(); return true; }
+  const g=t.closest('.chips[id]'); if(g&&groupDefaults.has(g.id)){ const d=groupDefaults.get(g.id), b=d!=null&&$$('.chip',g).find(x=>x.dataset.v===d); if(b&&b.getAttribute('aria-pressed')!=='true') b.click(); return true; }
+  const el=t.closest('input, select')||t.closest('label.chip')?.querySelector('input'); if(!el||el.disabled||!rangeDefaults.has(el)) return false;
+  if(el.type==='radio'){ const on=$$(`input[name="${el.name}"]`).find(x=>rangeDefaults.get(x)===true); if(on&&!on.checked){ on.checked=true; fire(on); } return true; }
+  const d=rangeDefaults.get(el); if(fieldVal(el)!==d){ if(el.type==='checkbox') el.checked=d; else el.value=d; fire(el); } return true; }
+document.addEventListener('contextmenu',e=>{ if(!e.defaultPrevented&&e.target instanceof Element&&resetSetting(e.target)) e.preventDefault(); });
 
 
 /* ---------- transport + shortcuts ---------- */
